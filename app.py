@@ -250,7 +250,7 @@ if ticker_input:
                 df_wk['Prev_MA20'] = df_wk['MA20'].shift(1)
                 df_wk['Prev_ATR_Stop'] = df_wk['ATR_Stop'].shift(1)
                 
-                # 메인 타점
+                # 매수 타점
                 df_wk['Signal_Main'] = (
                     df_wk['Converged'] & 
                     (df_wk['Close'] > df_wk['MA20']) & 
@@ -532,7 +532,7 @@ if ticker_input:
                 # 4. 시각화 (Plotly)
                 st.markdown("<br><br>", unsafe_allow_html=True)
                 st.markdown("### 🔭 트레이딩뷰 주봉 차트")
-                st.markdown("<p style='color:#8b949e; font-size:0.95rem; margin-top:-5px;'> 메인 타점 |  재진입 타점 |  매도 액션 &nbsp;|&nbsp; <b>선풍기: MA10(보라), MA20(노랑), MA60(초록), MA120(갈색), ATR스탑(주황점선)</b></p>", unsafe_allow_html=True)
+                st.markdown("<p style='color:#8b949e; font-size:0.95rem; margin-top:-5px;'> 매수 타점 |  재진입 타점 |  매도 액션 &nbsp;|&nbsp; <b>선풍기: MA10(보라), MA20(노랑), MA60(초록), MA120(갈색), ATR스탑(주황점선)</b></p>", unsafe_allow_html=True)
                 
                 fig_wk = go.Figure()
                 
@@ -551,7 +551,7 @@ if ticker_input:
                 y_re = df_wk[df_wk['Signal_Reentry']]['Low'] * 0.92
                 y_sell = df_wk[df_wk['Signal_Sell']]['High'] * 1.08
                 
-                fig_wk.add_trace(go.Scatter(x=df_wk[df_wk['Signal_Main']].index, y=y_main, mode='markers', marker=dict(symbol='triangle-up', color='red', size=20), name=' 메인 타점'))
+                fig_wk.add_trace(go.Scatter(x=df_wk[df_wk['Signal_Main']].index, y=y_main, mode='markers', marker=dict(symbol='triangle-up', color='red', size=20), name=' 매수 타점'))
                 fig_wk.add_trace(go.Scatter(x=df_wk[df_wk['Signal_Reentry']].index, y=y_re, mode='markers', marker=dict(symbol='triangle-up', color='#00e676', size=16), name=' 재진입 타점'))
                 fig_wk.add_trace(go.Scatter(x=df_wk[df_wk['Signal_Sell']].index, y=y_sell, mode='markers', marker=dict(symbol='triangle-down', color='#29b6f6', size=16), name=' 매도 타점'))
                 
