@@ -397,6 +397,37 @@ if ticker_input:
                 with rc2: st.metric(label="P/S Ratio (주가/매출액)", value=f"{ps_ratio:.2f}배" if ps_ratio else "N/A", help="시가총액을 연간 매출액으로 나눈 배수입니다. 이익이 안 나는 고성장 기업의 상대적 몸값을 잴 때 필수적입니다.")
                 with rc3: st.metric(label="EV/Revenue (기업가치/매출)", value=f"{ev_revenue:.2f}배" if ev_revenue else "N/A", help="기업가치를 매출액으로 나눈 값으로, P/S보다 부채까지 고려하여 더 정교하게 몸값을 잽니다.")
                 with rc4: st.metric(label="Forward P/E (선행 PER)", value=f"{forward_pe:.2f}배" if forward_pe else "N/A", help="향후 1년 예상 순이익 대비 주가가 몇 배인지 나타냅니다. 과거 실적보다 미래의 기대치를 엿볼 수 있습니다.")
+            
+            # ==========================================
+            # 💡 [신규] 동적 가이드 아코디언 버튼 (st.expander)
+            # ==========================================
+            with st.expander("💡 알파 스프레드 4대 핵심 지표 완벽 해독 가이드", expanded=False):
+                # 동적 해석 변수 세팅
+                ev_e_text = f"{ev_ebitda:.2f}배" if ev_ebitda else "N/A"
+                ps_text = f"{ps_ratio:.2f}배" if ps_ratio else "N/A"
+                ev_r_text = f"{ev_revenue:.2f}배" if ev_revenue else "N/A"
+                fwd_pe_text = f"{forward_pe:.2f}배" if forward_pe else "N/A"
+                
+                ev_e_years = f"약 {int(ev_ebitda)}년" if ev_ebitda else "알 수 없는 기간"
+                ev_e_eval = "꽤 비싼(고평가)" if ev_ebitda and ev_ebitda > 10 else "저렴한(저평가)"
+                pe_eval = "시장 평균 대비 비싸게" if forward_pe and forward_pe > 15 else "시장 평균 대비 저렴하게"
+                
+                st.markdown(f"""
+                **① EV/EBITDA (현재 {ev_e_text})**
+                * **의미:** "내가 이 회사를 통째로 인수했을 때, 이 회사가 영업으로 벌어들이는 현금(EBITDA)으로 내 투자금을 전부 회수하는 데 몇 년이 걸릴까?"를 뜻합니다.
+                * **기준치:** 통상적으로 월가에서는 **'10배 이하'**를 저평가(싸다)로 봅니다.
+                * **해석:** 현재 {ev_e_text}면 투자금 회수까지 {ev_e_years}이 걸린다는 뜻이므로, 절대적인 기준으로는 {ev_e_eval} 상태입니다. (단, AI나 테크 기업들은 미래 성장이 확실해서 20배 이상을 받는 경우가 흔합니다.)
+                
+                **② P/S Ratio & ③ EV/Revenue (현재 {ps_text}, {ev_r_text})**
+                * **의미:** 두 지표 모두 "이 회사가 1년 동안 파는 '매출액' 대비 덩치(시가총액/기업가치)가 몇 배인가?"를 봅니다. (아직 순이익은 적자지만 매출이 폭발적으로 늘어나는 기업을 평가할 때 주로 씁니다.)
+                * **기준치:** 업종마다 완전히 다릅니다. 이마트 같은 유통업/제조업은 1배 미만이 정상입니다. 반면 마진율이 엄청난 소프트웨어(SaaS), AI 기업은 5~10배를 정상으로 봅니다.
+                * **해석:** 매출액의 {ps_text}에 거래되고 있다는 것은, 이 회사가 이익을 엄청나게 많이 남기는 독점적인 테크/소프트웨어 기업이라는 것을 시장이 인정해주고 있다는 뜻이거나, 혹은 심각한 고평가 상태임을 의미합니다.
+                
+                **④ Forward P/E (선행 PER) (현재 {fwd_pe_text})**
+                * **의미:** "내년(향후 1년) 예상 순이익 대비 주가가 몇 배로 거래되는가?"를 뜻합니다. 가장 대중적인 지표입니다.
+                * **기준치:** 미국 S&P 500 시장 전체의 역사적 평균은 대략 15배 ~ 18배 수준입니다.
+                * **해석:** 평균인 15배를 기준으로 볼 때 현재 {fwd_pe_text}이므로 {pe_eval} 거래되고 있습니다. 향후 성장에 대한 투자자들의 프리미엄이 반영된 수치입니다.
+                """)
                 
             st.markdown("<br>", unsafe_allow_html=True)
             
