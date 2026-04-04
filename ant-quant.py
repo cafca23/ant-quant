@@ -142,6 +142,12 @@ if ticker_input:
             shares = info.get('sharesOutstanding', None)
             sector = info.get('sector', '')
             
+            # 상대가치(Multiples) 추가 지표 로드
+            ev_ebitda = info.get('enterpriseToEbitda', None)
+            ps_ratio = info.get('priceToSalesTrailing12Months', None)
+            ev_revenue = info.get('enterpriseToRevenue', None)
+            forward_pe = info.get('forwardPE', None)
+            
             # 💡 AI 종목 체질 판독 로직
             is_growth = (payout_ratio < 0.15) or ("Technology" in sector) or ("Communication" in sector) or (peg_ratio and peg_ratio > 1.5)
             
@@ -292,13 +298,10 @@ if ticker_input:
             with st.container(border=True):
                 pc1, pc2, pc3, pc4 = st.columns(4)
                 
-                # 💡 [핵심] PEG N/A 동적 툴팁 생성
                 peg_val = f"{peg_ratio:.2f}" if peg_ratio else "N/A"
                 peg_delta = ("저평가 구간" if peg_ratio and peg_ratio <= 1.0 else "고평가 구간") if peg_ratio else None
-                
                 peg_help_text = "PER(주가수익비율)을 이익성장률로 나눈 값입니다. 보통 1.0 이하이면 기업의 미래 성장 속도에 비해 현재 주가가 싸다(저평가)고 판단합니다."
-                if peg_ratio is None:
-                    peg_help_text += "\n\n🚨 [N/A 발생 이유]\n야후 파이낸스에 해당 기업의 '향후 5년 이익성장률 추정치'가 누락되어 있거나, 기업이 현재 적자 상태여서 계산이 불가능하기 때문입니다."
+                if peg_ratio is None: peg_help_text += "\n\n🚨 [N/A 발생 이유]\n야후 파이낸스에 향후 이익성장률 추정치가 누락되어 있거나 적자 상태이기 때문입니다."
                 
                 fcf_val = "N/A"
                 if fcf is not None:
@@ -313,6 +316,22 @@ if ticker_input:
                 with pc2: st.metric(label="Free Cash Flow (잉여현금흐름)", value=fcf_val, delta="현금창출 긍정적" if fcf and fcf > 0 else "우려", delta_color="normal" if fcf and fcf > 0 else "inverse", help="필수 투자를 마치고 남은 순수 잉여현금입니다.")
                 with pc3: st.metric(label="Payout Ratio (배당 성향)", value=payout_val, delta="건전" if payout_ratio and payout_ratio <= 0.6 else "과부하 우려", delta_color="normal" if payout_ratio and payout_ratio <= 0.6 else "inverse", help="순이익 중 배당금으로 지급하는 비율입니다.")
                 with pc4: st.metric(label="Inst. Ownership (기관 보유율)", value=inst_val, help="월가 기관 투자자들의 보유 비율입니다.")
+                
+                # 💡 [신규] 알파 스프레드 기반 상대가치(Multiples) 핵심 지표 추가
+                st.markdown("<hr style='margin: 15px 0; border-color: #30363d;'>", unsafe_allow_html=True)
+                st.markdown("<p style='color:#8b949e; font-weight:bold; margin-bottom:10px;'>🔍 알파 스프레드 기반 상대가치 지표 (Relative Valuation Multiples)</p>", unsafe_allow_html=True)
+                
+                rc1, rc2, rc3, rc4 = st.columns(4)
+                
+                ev_ebitda_val = f"{ev_ebitda:.2f}" if ev_ebitda else "N/A"
+                ps_val = f"{ps_ratio:.2f}" if ps_ratio else "N/A"
+                ev_rev_val = f"{ev_revenue:.2f}" if ev_revenue else "N/A"
+                fwd_pe_val = f"{forward_pe:.2f}" if forward_pe else "N/A"
+                
+                with rc1: st.metric(label="EV/EBITDA (현금창출비율)", value=ev_ebitda_val, help="기업가치(부채포함)를 영업이익(EBITDA)으로 나눈 값입니다. 보통 10 이하일 때 저평가로 봅니다.")
+                with rc2: st.metric(label="P/S Ratio (주가/매출액)", value=ps_val, help="시가총액을 연간 매출액으로 나눈 배수입니다. 이익이 안 나는 고성장 기업의 상대적 몸값을 잴 때 필수적입니다.")
+                with rc3: st.metric(label="EV/Revenue (기업가치/매출)", value=ev_rev_val, help="기업가치를 매출액으로 나눈 값으로, P/S보다 부채까지 고려하여 더 정교하게 몸값을 잽니다.")
+                with rc4: st.metric(label="Forward P/E (선행 PER)", value=fwd_pe_val, help="향후 1년 예상 순이익 대비 주가가 몇 배인지 나타냅니다. 과거 실적보다 미래의 기대치를 엿볼 수 있습니다.")
                 
             st.markdown("<br>", unsafe_allow_html=True)
             
