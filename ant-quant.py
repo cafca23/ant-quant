@@ -124,20 +124,18 @@ with st.sidebar:
                 if ai_peers: 
                     default_peers = ai_peers
             
-            # 💡 [핵심 완벽 패치] 가치주 성장률 뻥튀기 원천 차단
+            # 대소문자 오류 방지를 위해 소문자로 치환
             roe_sb = info_sb.get('returnOnEquity', 0)
             payout_sb = info_sb.get('payoutRatio', 0) if info_sb.get('payoutRatio') else 0
-            sector_sb = info_sb.get('sector', '')
+            sector_sb = str(info_sb.get('sector', '')).lower()
             
             is_value_stock = False
-            # 1. 굴뚝/전통 산업이거나 2. 배당을 40% 이상 준다면 무조건 가치주로 컷오프
-            value_sectors = ["Consumer Defensive", "Utilities", "Energy", "Real Estate", "Financial Services", "Basic Materials", "Industrials"]
+            value_sectors = ["consumer defensive", "utilities", "energy", "real estate", "financial services", "basic materials", "industrials"]
             if any(v_sec in sector_sb for v_sec in value_sectors) or payout_sb >= 0.40:
                 is_value_stock = True
             
             if roe_sb is not None and roe_sb > 0:
                 if is_value_stock:
-                    # 가치/배당주는 ROE 함정에 속지 않고 5.0%로 보수적 강제 세팅
                     default_g = 5.0
                     sgr_caption = f"💡 전통 가치주 보수적 세팅: {default_g}% (강제 고정)"
                 else:
@@ -148,9 +146,11 @@ with st.sidebar:
 
     peer_input = st.text_input("경쟁사 티커 (쉼표로 구분)", value=default_peers, help="AI가 자동으로 찾아낸 경쟁사입니다. 직접 수정하셔도 됩니다.")
 
-    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input:
+    # 💡 [핵심 완벽 패치] Streamlit 캐시 강제 무력화 (버전 코드 삽입)
+    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final':
         st.session_state.g_slider = default_g
         st.session_state.last_ticker = ticker_input
+        st.session_state.app_version = 'v_final' # 이 문구 때문에 메모리가 강제로 새 값(5.0%)을 덮어씁니다.
         
     st.divider()
     
@@ -216,16 +216,15 @@ if ticker_input:
             fcf = info.get('freeCashflow', None)
             payout_ratio = info.get('payoutRatio', 0) if info.get('payoutRatio') else 0
             shares = info.get('sharesOutstanding', None)
-            sector = info.get('sector', '')
+            sector = str(info.get('sector', '')).lower()
             
             ev_ebitda = info.get('enterpriseToEbitda', None)
             ps_ratio = info.get('priceToSalesTrailing12Months', None)
             ev_revenue = info.get('enterpriseToRevenue', None)
             forward_pe = info.get('forwardPE', None)
             
-            # 💡 [핵심 완벽 패치] 메인 화면 적정주가 모델 스위치도 동일하게 적용
             is_main_value_stock = False
-            value_sectors = ["Consumer Defensive", "Utilities", "Energy", "Real Estate", "Financial Services", "Basic Materials", "Industrials"]
+            value_sectors = ["consumer defensive", "utilities", "energy", "real estate", "financial services", "basic materials", "industrials"]
             if any(v_sec in sector for v_sec in value_sectors) or payout_ratio >= 0.40:
                 is_main_value_stock = True
             
