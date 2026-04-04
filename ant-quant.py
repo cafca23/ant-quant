@@ -291,8 +291,14 @@ if ticker_input:
             st.markdown("### 👔 Professional Insights (전문가 핵심 지표)")
             with st.container(border=True):
                 pc1, pc2, pc3, pc4 = st.columns(4)
+                
+                # 💡 [핵심] PEG N/A 동적 툴팁 생성
                 peg_val = f"{peg_ratio:.2f}" if peg_ratio else "N/A"
                 peg_delta = ("저평가 구간" if peg_ratio and peg_ratio <= 1.0 else "고평가 구간") if peg_ratio else None
+                
+                peg_help_text = "PER(주가수익비율)을 이익성장률로 나눈 값입니다. 보통 1.0 이하이면 기업의 미래 성장 속도에 비해 현재 주가가 싸다(저평가)고 판단합니다."
+                if peg_ratio is None:
+                    peg_help_text += "\n\n🚨 [N/A 발생 이유]\n야후 파이낸스에 해당 기업의 '향후 5년 이익성장률 추정치'가 누락되어 있거나, 기업이 현재 적자 상태여서 계산이 불가능하기 때문입니다."
                 
                 fcf_val = "N/A"
                 if fcf is not None:
@@ -303,8 +309,7 @@ if ticker_input:
                 payout_val = f"{payout_ratio * 100:.1f}%" if payout_ratio else "N/A"
                 inst_val = f"{info.get('heldPercentInstitutions', 0) * 100:.1f}%" if info.get('heldPercentInstitutions') else "N/A"
 
-                # 💡 [핵심] 괄호 한글 라벨 완벽 복구
-                with pc1: st.metric(label="PEG Ratio (성장성 대비 가치)", value=peg_val, delta=peg_delta, delta_color="normal" if peg_ratio and peg_ratio <= 1.0 else "inverse", help="이익성장률 대비 주가. 1.0 이하면 저평가로 봅니다.")
+                with pc1: st.metric(label="PEG Ratio (성장성 대비 가치)", value=peg_val, delta=peg_delta, delta_color="normal" if peg_ratio and peg_ratio <= 1.0 else "inverse", help=peg_help_text)
                 with pc2: st.metric(label="Free Cash Flow (잉여현금흐름)", value=fcf_val, delta="현금창출 긍정적" if fcf and fcf > 0 else "우려", delta_color="normal" if fcf and fcf > 0 else "inverse", help="필수 투자를 마치고 남은 순수 잉여현금입니다.")
                 with pc3: st.metric(label="Payout Ratio (배당 성향)", value=payout_val, delta="건전" if payout_ratio and payout_ratio <= 0.6 else "과부하 우려", delta_color="normal" if payout_ratio and payout_ratio <= 0.6 else "inverse", help="순이익 중 배당금으로 지급하는 비율입니다.")
                 with pc4: st.metric(label="Inst. Ownership (기관 보유율)", value=inst_val, help="월가 기관 투자자들의 보유 비율입니다.")
