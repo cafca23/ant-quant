@@ -43,7 +43,7 @@ def get_macro_data():
     except: tnx = 4.2  
     return float(usdkrw), float(tnx)
 
-# 💡 [신규] AI 기반 동종 업계 경쟁사 자동 탐색기
+# 💡 AI 기반 동종 업계 경쟁사 자동 탐색기
 @st.cache_data(ttl=86400, show_spinner="AI가 해당 산업의 최적 경쟁사를 탐색 중입니다... 🕵️‍♂️")
 def get_dynamic_peers(ticker, name, sector):
     try:
@@ -104,7 +104,6 @@ with st.sidebar:
     
     st.divider()
     
-    # 💡 [핵심] 경쟁사 자동 세팅 로직
     st.markdown("### 🤝 동종 업계 (Peer) 설정")
     default_peers = "MSFT, GOOGL, AAPL" 
     
@@ -116,7 +115,6 @@ with st.sidebar:
         try:
             info_sb, _, _, _ = get_stock_market_data(ticker_for_sidebar)
             
-            # --- AI 동종 업계 경쟁사 탐색 ---
             if ticker_for_sidebar in PEER_MAP:
                 default_peers = PEER_MAP[ticker_for_sidebar]
             else:
@@ -387,6 +385,9 @@ if ticker_input:
                 
             st.markdown("<br>", unsafe_allow_html=True)
             
+            # ==========================================
+            # 💡 [업그레이드] 동종 업계 (Peer) 비교 테이블 머리글 한글 추가
+            # ==========================================
             st.markdown("### ⚖️ 동종 업계 멀티플 비교 (Peer Valuation)")
             
             peer_df = get_peers_data(ticker, peer_input)
@@ -397,7 +398,8 @@ if ticker_input:
                 median_ps = peer_df['P/S'].median()
                 median_ev_rev = peer_df['EV/Rev'].median()
                 
-                table_html = "<table class='peer-table'><tr><th>Ticker</th><th>Price</th><th>Forward P/E</th><th>EV/EBITDA</th><th>P/S Ratio</th><th>EV/Revenue</th></tr>"
+                # 💡 [핵심] 테이블 머리글(th)에 한글 번역 추가
+                table_html = "<table class='peer-table'><tr><th>Ticker</th><th>Price (현재 주가)</th><th>Forward P/E (선행 PER)</th><th>EV/EBITDA (현금창출비율)</th><th>P/S Ratio (주가/매출액)</th><th>EV/Revenue (기업가치/매출)</th></tr>"
                 
                 for _, row in peer_df.iterrows():
                     is_main = row['Ticker'] == ticker
@@ -426,6 +428,10 @@ if ticker_input:
                 st.warning("경쟁사 데이터를 불러올 수 없습니다.")
                 
             st.markdown("<br>", unsafe_allow_html=True)
+
+            # ==========================================
+            # 3대 핵심 차트 렌더링 섹션
+            # ==========================================
 
             if not hist_10y.empty and final_fair_value != "N/A":
                 df_10y = hist_10y[['Close']].copy()
@@ -510,6 +516,7 @@ if ticker_input:
                 )
                 with st.container(border=True): st.plotly_chart(fig_wk, use_container_width=True)
 
+            # --- AI 수석 비서 브리핑 ---
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("### 🤖 수석 비서의 AI 종합 브리핑 (Tier 1)")
             if st.button("✨ 퀀트 데이터 기반 AI 분석 보고서 작성", type="primary", width="stretch"):
