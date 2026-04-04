@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from datetime import datetime
 import google.generativeai as genai
 import re
@@ -43,7 +44,7 @@ def get_macro_data():
     except: tnx = 4.2  
     return float(usdkrw), float(tnx)
 
-# 💡 AI 기반 동종 업계 경쟁사 자동 탐색기
+# 💡 AI 동종 업계 자동 탐색기
 @st.cache_data(ttl=86400, show_spinner="AI가 해당 산업의 최적 경쟁사를 탐색 중입니다... 🕵️‍♂️")
 def get_dynamic_peers(ticker, name, sector):
     try:
@@ -61,7 +62,6 @@ def get_peers_data(ticker, peer_str):
     peer_list = [p.strip().upper() for p in peer_str.split(",") if p.strip()]
     if ticker not in peer_list:
         peer_list = [ticker] + peer_list
-        
     data = []
     for p in peer_list:
         try:
@@ -84,7 +84,7 @@ def get_stock_market_data(ticker):
     hist = stock.history(period="2y")
     hist_10y = stock.history(period="10y", interval="1mo")
     hist_daily_5y = stock.history(period="5y", interval="1d")
-    hist_weekly = hist_daily_5y.resample('W-FRI').agg({'Open':'first','High':'max','Low':'min','Close':'last'}).dropna() if not hist_daily_5y.empty else pd.DataFrame()
+    hist_weekly = hist_daily_5y.resample('W-FRI').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'}).dropna() if not hist_daily_5y.empty else pd.DataFrame()
     return info, hist, hist_10y, hist_weekly
 
 ex_rate, risk_free_rate = get_macro_data()
@@ -97,7 +97,7 @@ PEER_MAP = {
 
 with st.sidebar:
     st.markdown("### ⚙️ 분석 설정")
-    ticker_input = st.text_input("종목 티커 입력 (예: ORCL, OXY, KO)", value="ORCL")
+    ticker_input = st.text_input("종목 티커 입력 (예: AAPL, KO, NVDA)", value="ORCL")
     
     currency_opt = st.radio("💱 표시 통화", ["$ 달러", "₩ 원화"], horizontal=True)
     is_krw = currency_opt == "₩ 원화"
@@ -106,7 +106,6 @@ with st.sidebar:
     
     st.markdown("### 🤝 동종 업계 (Peer) 설정")
     default_peers = "MSFT, GOOGL, AAPL" 
-    
     default_g = 15.0
     sgr_caption = "💡 AI 추천 성장률: 정보 없음 (기본값 15.0% 적용)"
     
@@ -114,17 +113,14 @@ with st.sidebar:
         ticker_for_sidebar = ticker_input.upper()
         try:
             info_sb, _, _, _ = get_stock_market_data(ticker_for_sidebar)
-            
             if ticker_for_sidebar in PEER_MAP:
                 default_peers = PEER_MAP[ticker_for_sidebar]
             else:
                 company_name = info_sb.get('shortName', ticker_for_sidebar)
                 sector = info_sb.get('sector', '')
                 ai_peers = get_dynamic_peers(ticker_for_sidebar, company_name, sector)
-                if ai_peers: 
-                    default_peers = ai_peers
+                if ai_peers: default_peers = ai_peers
             
-            # 대소문자 오류 방지를 위해 소문자로 치환
             roe_sb = info_sb.get('returnOnEquity', 0)
             payout_sb = info_sb.get('payoutRatio', 0) if info_sb.get('payoutRatio') else 0
             sector_sb = str(info_sb.get('sector', '')).lower()
@@ -146,11 +142,11 @@ with st.sidebar:
 
     peer_input = st.text_input("경쟁사 티커 (쉼표로 구분)", value=default_peers, help="AI가 자동으로 찾아낸 경쟁사입니다. 직접 수정하셔도 됩니다.")
 
-    # 💡 [핵심 완벽 패치] Streamlit 캐시 강제 무력화 (버전 코드 삽입)
-    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final':
+    # 캐시 강제 무력화 (버전 코드 삽입)
+    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_plus':
         st.session_state.g_slider = default_g
         st.session_state.last_ticker = ticker_input
-        st.session_state.app_version = 'v_final' # 이 문구 때문에 메모리가 강제로 새 값(5.0%)을 덮어씁니다.
+        st.session_state.app_version = 'v_final_plus'
         
     st.divider()
     
@@ -181,11 +177,15 @@ def fmt_multi(val):
     if pd.isna(val) or val == "N/A" or val is None: return "-"
     return f"{val:.2f}배"
 
+def fmt_pct(val):
+    if pd.isna(val) or val == "N/A" or val is None: return "N/A"
+    return f"{val * 100:.2f}%"
+
 # --- 메인 로직 ---
 col_header1, col_header2 = st.columns([3, 1])
 with col_header1:
     st.markdown("<h1 style='margin-bottom: 0; font-size: 2.0rem;'>📈 앤트리치 퀀트 터미널</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #8b949e; font-size: 1.05rem; margin-top: 5px;'>월스트리트 DCF + 상대가치(Multiples) 하이브리드 엔진</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #8b949e; font-size: 1.05rem; margin-top: 5px;'>월스트리트 DCF + 상대가치 + 스마트머니 하이브리드 엔진</p>", unsafe_allow_html=True)
 
 if ticker_input:
     ticker = ticker_input.upper()
@@ -202,6 +202,9 @@ if ticker_input:
             loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
             rs = gain / loss
             hist['RSI'] = 100 - (100 / (1 + rs))
+            
+            # 💡 [신규] OBV (On-Balance Volume) 계산
+            hist['OBV'] = (np.sign(hist['Close'].diff()) * hist['Volume']).fillna(0).cumsum()
 
             current_price = info.get('currentPrice', hist['Close'].iloc[-1])
             sma50_val = hist['SMA50'].iloc[-1]
@@ -218,11 +221,18 @@ if ticker_input:
             shares = info.get('sharesOutstanding', None)
             sector = str(info.get('sector', '')).lower()
             
+            # 멀티플 지표
             ev_ebitda = info.get('enterpriseToEbitda', None)
             ps_ratio = info.get('priceToSalesTrailing12Months', None)
             ev_revenue = info.get('enterpriseToRevenue', None)
             forward_pe = info.get('forwardPE', None)
             
+            # 💡 [신규] 스마트머니 4대 지표 로드
+            short_pct = info.get('shortPercentOfFloat', None)
+            insider_pct = info.get('heldPercentInsiders', None)
+            earnings_growth = info.get('earningsGrowth', None) # 실적 추정/성장률 (전년 동기 대비)
+            
+            # 메인 가치주 스위치
             is_main_value_stock = False
             value_sectors = ["consumer defensive", "utilities", "energy", "real estate", "financial services", "basic materials", "industrials"]
             if any(v_sec in sector for v_sec in value_sectors) or payout_ratio >= 0.40:
@@ -406,7 +416,38 @@ if ticker_input:
                 with rc2: st.metric(label="P/S Ratio (주가/매출액)", value=f"{ps_ratio:.2f}배" if ps_ratio else "N/A", help="시가총액을 연간 매출액으로 나눈 배수입니다. 이익이 안 나는 고성장 기업의 상대적 몸값을 잴 때 필수적입니다.")
                 with rc3: st.metric(label="EV/Revenue (기업가치/매출)", value=f"{ev_revenue:.2f}배" if ev_revenue else "N/A", help="기업가치를 매출액으로 나눈 값으로, P/S보다 부채까지 고려하여 더 정교하게 몸값을 잽니다.")
                 with rc4: st.metric(label="Forward P/E (선행 PER)", value=f"{forward_pe:.2f}배" if forward_pe else "N/A", help="향후 1년 예상 순이익 대비 주가가 몇 배인지 나타냅니다. 과거 실적보다 미래의 기대치를 엿볼 수 있습니다.")
-            
+                
+                # ==========================================
+                # 💡 [신규] 월스트리트 스마트머니 & 심리 지표 
+                # ==========================================
+                st.markdown("<hr style='margin: 15px 0; border-color: #30363d;'>", unsafe_allow_html=True)
+                st.markdown("<p style='color:#e879f9; font-weight:bold; margin-bottom:10px;'>🕵️‍♂️ 월스트리트 스마트머니 & 심리 지표 (Smart Money & Sentiment)</p>", unsafe_allow_html=True)
+                
+                sc1, sc2, sc3, sc4 = st.columns(4)
+                
+                # 공매도 비율 판독 로직 (체질별 차등 적용)
+                short_eval = None
+                short_color = "off"
+                if short_pct is not None:
+                    if is_main_value_stock:
+                        short_eval = "안전" if short_pct < 0.03 else "세력 공매도 위험!"
+                        short_color = "normal" if short_pct < 0.03 else "inverse"
+                    else:
+                        short_eval = "정상/숏스퀴즈 기대" if short_pct < 0.10 else "세력 하방 베팅"
+                        short_color = "normal" if short_pct < 0.10 else "inverse"
+                
+                # 실적 추정치 성장 판독
+                earn_eval = None
+                earn_color = "off"
+                if earnings_growth is not None:
+                    earn_eval = "추정치 상향!" if earnings_growth > 0 else "추정치 둔화/하향"
+                    earn_color = "normal" if earnings_growth > 0 else "inverse"
+
+                with sc1: st.metric(label="Short Interest (공매도 잔고 비율)", value=fmt_pct(short_pct), delta=short_eval, delta_color=short_color, help="유통 주식 중 공매도(하락 베팅)가 차지하는 비율입니다. 가치주는 3% 이상, 테크주는 10% 이상이면 위험 신호입니다.")
+                with sc2: st.metric(label="Insider Ownership (내부자 보유율)", value=fmt_pct(insider_pct), help="CEO 등 회사 내부자가 자사주를 얼마나 쥐고 있는지 보여줍니다. 숫자가 클수록, 그리고 최근에 늘어났을수록 강력한 매수 신호입니다.")
+                with sc3: st.metric(label="Earnings Growth (실적/추정치 성장)", value=fmt_pct(earnings_growth), delta=earn_eval, delta_color=earn_color, help="최근 월가 애널리스트들의 실적(순이익) 추정치 증가율입니다. 양수(+)면 기관들의 목표가가 올라가고 있다는 뜻입니다.")
+                with sc4: st.metric(label="OBV Trend (매집/분산 수급)", value="하단 차트 확인 📉", help="아래 일봉 차트 밑의 OBV 보조 차트를 통해 세력이 매집 중인지, 물량을 떠넘기고 있는지 시각적으로 확인하십시오.")
+
             with st.expander("💡 알파 스프레드 4대 핵심 지표 완벽 해독 가이드", expanded=False):
                 ev_e_text = f"{ev_ebitda:.2f}배" if ev_ebitda else "N/A"
                 ps_text = f"{ps_ratio:.2f}배" if ps_ratio else "N/A"
@@ -437,7 +478,6 @@ if ticker_input:
             st.markdown("<br>", unsafe_allow_html=True)
             
             st.markdown("### ⚖️ 동종 업계 멀티플 비교 (Peer Valuation)")
-            
             peer_df = get_peers_data(ticker, peer_input)
             
             if not peer_df.empty:
@@ -447,30 +487,14 @@ if ticker_input:
                 median_ev_rev = peer_df['EV/Rev'].median()
                 
                 table_html = "<table class='peer-table'><tr><th>Ticker</th><th>Price (현재 주가)</th><th>Forward P/E (선행 PER)</th><th>EV/EBITDA (현금창출비율)</th><th>P/S Ratio (주가/매출액)</th><th>EV/Revenue (기업가치/매출)</th></tr>"
-                
                 for _, row in peer_df.iterrows():
                     is_main = row['Ticker'] == ticker
                     row_class = "peer-main-row" if is_main else ""
-                    table_html += f"<tr class='{row_class}'>"
-                    table_html += f"<td>{row['Ticker']}</td>"
-                    table_html += f"<td>{fmt_price(row['Price'])}</td>"
-                    table_html += f"<td>{fmt_multi(row['Fwd P/E'])}</td>"
-                    table_html += f"<td>{fmt_multi(row['EV/EBITDA'])}</td>"
-                    table_html += f"<td>{fmt_multi(row['P/S'])}</td>"
-                    table_html += f"<td>{fmt_multi(row['EV/Rev'])}</td>"
-                    table_html += "</tr>"
+                    table_html += f"<tr class='{row_class}'><td>{row['Ticker']}</td><td>{fmt_price(row['Price'])}</td><td>{fmt_multi(row['Fwd P/E'])}</td><td>{fmt_multi(row['EV/EBITDA'])}</td><td>{fmt_multi(row['P/S'])}</td><td>{fmt_multi(row['EV/Rev'])}</td></tr>"
                 
-                table_html += "<tr class='peer-median-row'>"
-                table_html += "<td>산업 중앙값 (Median)</td>"
-                table_html += "<td>-</td>"
-                table_html += f"<td>{fmt_multi(median_pe)}</td>"
-                table_html += f"<td>{fmt_multi(median_ev_ebitda)}</td>"
-                table_html += f"<td>{fmt_multi(median_ps)}</td>"
-                table_html += f"<td>{fmt_multi(median_ev_rev)}</td>"
-                table_html += "</tr></table>"
+                table_html += f"<tr class='peer-median-row'><td>산업 중앙값 (Median)</td><td>-</td><td>{fmt_multi(median_pe)}</td><td>{fmt_multi(median_ev_ebitda)}</td><td>{fmt_multi(median_ps)}</td><td>{fmt_multi(median_ev_rev)}</td></tr></table>"
                 
-                with st.container(border=True):
-                    st.markdown(table_html, unsafe_allow_html=True)
+                with st.container(border=True): st.markdown(table_html, unsafe_allow_html=True)
             else:
                 st.warning("경쟁사 데이터를 불러올 수 없습니다.")
                 
@@ -513,19 +537,28 @@ if ticker_input:
             if is_krw:
                 for col in ['Open', 'High', 'Low', 'Close', 'SMA50', 'SMA200']: plot_hist_1y[col] *= ex_rate
 
-            st.markdown("<br>### 📉 최근 1년 주가 일봉 차트 (SMA 50, SMA 200)", unsafe_allow_html=True)
-            fig = go.Figure()
-            fig.add_trace(go.Candlestick(x=plot_hist_1y.index, open=plot_hist_1y['Open'], high=plot_hist_1y['High'], low=plot_hist_1y['Low'], close=plot_hist_1y['Close'], increasing_line_color='#ef5350', decreasing_line_color='#42a5f5', name=f"{ticker} 캔들"))
-            fig.add_trace(go.Scatter(x=plot_hist_1y.index, y=plot_hist_1y['SMA50'], mode='lines', line=dict(color='#ffd600', width=1.5), name='50일 이동평균'))
-            fig.add_trace(go.Scatter(x=plot_hist_1y.index, y=plot_hist_1y['SMA200'], mode='lines', line=dict(color='#00b0ff', width=1.5), name='200일 이동평균'))
+            st.markdown("<br>### 📉 최근 1년 주가 일봉 차트 & 세력 매집(OBV) 지표", unsafe_allow_html=True)
+            
+            # 💡 [신규] 캔들차트와 OBV 보조차트를 위아래로 결합
+            fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25])
+            
+            # 메인 주가 차트
+            fig.add_trace(go.Candlestick(x=plot_hist_1y.index, open=plot_hist_1y['Open'], high=plot_hist_1y['High'], low=plot_hist_1y['Low'], close=plot_hist_1y['Close'], increasing_line_color='#ef5350', decreasing_line_color='#42a5f5', name=f"{ticker} 캔들"), row=1, col=1)
+            fig.add_trace(go.Scatter(x=plot_hist_1y.index, y=plot_hist_1y['SMA50'], mode='lines', line=dict(color='#ffd600', width=1.5), name='50일 이동평균'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=plot_hist_1y.index, y=plot_hist_1y['SMA200'], mode='lines', line=dict(color='#00b0ff', width=1.5), name='200일 이동평균'), row=1, col=1)
+            
+            # 하단 OBV 차트
+            fig.add_trace(go.Scatter(x=plot_hist_1y.index, y=plot_hist_1y['OBV'], mode='lines', line=dict(color='#e879f9', width=2), name='OBV (매집량)'), row=2, col=1)
             
             fig.update_layout(
-                xaxis_rangeslider_visible=False, height=600, margin=dict(l=0, r=0, t=10, b=0),
+                xaxis_rangeslider_visible=False, height=750, margin=dict(l=0, r=0, t=10, b=0),
                 template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                xaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d'),
-                yaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d', side='right', tickprefix="₩" if is_krw else "$"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
+            fig.update_yaxes(title_text="주가 (" + ("₩" if is_krw else "$") + ")", showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d', side='right', row=1, col=1)
+            fig.update_yaxes(title_text="OBV Volume", showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d', side='right', row=2, col=1)
+            fig.update_xaxes(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d', rangeslider_visible=False)
+            
             with st.container(border=True): st.plotly_chart(fig, use_container_width=True)
                 
             if not df_wk.empty:
@@ -562,23 +595,24 @@ if ticker_input:
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("### 🤖 수석 비서의 AI 종합 브리핑 (Tier 1)")
             if st.button("✨ 퀀트 데이터 기반 AI 분석 보고서 작성", type="primary", width="stretch"):
-                with st.spinner(f"[{ticker}]의 데이터와 경쟁사 비교표를 분석하여 AI 브리핑을 작성 중입니다... 🧠"):
+                with st.spinner(f"[{ticker}]의 수급 데이터와 경쟁사 비교표를 분석하여 AI 브리핑을 작성 중입니다... 🧠"):
                     try:
                         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                         model = genai.GenerativeModel('gemini-2.5-flash', generation_config={"temperature": 0.7, "max_output_tokens": 8000})
                         ai_median_pe = f"{median_pe:.2f}배" if not peer_df.empty else "데이터 없음"
+                        short_text = f"{short_pct*100:.2f}%" if short_pct else "데이터 없음"
                         
                         prompt = f"""
                         당신은 수석 퀀트 애널리스트입니다. [{ticker}] 분석 데이터를 브리핑해주세요.
                         - 터미널 점수: 10점 만점에 {score}점 ({judgment})
-                        - 적용된 모델: {model_used} / 안전마진: {margin_of_safety if margin_of_safety == "N/A" else f"{margin_of_safety:.1f}%"}
+                        - 적용된 모델: {model_used} / 공매도 비율: {short_text}
                         - 해당 기업 Forward P/E: {forward_pe}배 / 동종 업계 경쟁사 Forward P/E 중앙값: {ai_median_pe}
                         - ROE: {roe*100:.1f}% / 현재 미국 국채 금리: {risk_free_rate:.2f}%
                         
                         [작성 규칙]
-                        1. 시작: "대표님, [{ticker}] 퀀트 데이터 종합 분석 보고드립니다."
-                        2. 체질 평가: 왜 이 기업이 {model_used}로 평가되었는지(성장/가치) 설명하세요.
-                        3. 핵심 분석: 안전마진과 함께, 해당 기업의 P/E가 동종업계 중앙값보다 싼지 비싼지(상대가치)를 비교하여 매력도를 개조식(~함, ~됨)으로 분석하세요.
+                        1. 시작: "대표님, [{ticker}] 스마트머니 및 퀀트 종합 분석 보고드립니다."
+                        2. 공매도 수급 평가: 이 기업이 {model_used}로 평가되는 기업(가치주인지 성장주인지)이라는 점을 감안하여, 공매도 비율({short_text})이 위험한 수준인지 브리핑하세요. (가치주는 3%, 테크주는 10% 기준)
+                        3. 핵심 분석: 해당 기업의 P/E가 동종업계 중앙값보다 싼지 비싼지(상대가치)를 비교하여 매력도를 개조식(~함, ~됨)으로 분석하세요.
                         4. 별표(*)와 이모지 사용 금지. 대괄호([ ]) 사용.
                         5. 마침표(.) 뒤에는 무조건 줄바꿈(엔터).
                         6. 마지막 줄: "💡 수석 비서의 최종 투자의견:" 이라는 항목 달고 1줄 요약 결론.
