@@ -126,18 +126,11 @@ with st.sidebar:
             roe_sb = info_sb.get('returnOnEquity', 0)
             payout_sb = info_sb.get('payoutRatio', 0) if info_sb.get('payoutRatio') else 0
             sector_sb = str(info_sb.get('sector', '')).lower()
-            industry_sb = str(info_sb.get('industry', '')).lower() # 세부 산업 정보 추가
             
             is_value_stock = False
             value_sectors = ["consumer defensive", "utilities", "energy", "real estate", "financial services", "basic materials", "industrials"]
-            
-            # 대분류 스캔
             if any(v_sec in sector_sb for v_sec in value_sectors) or payout_sb >= 0.40:
                 is_value_stock = True
-                
-            # 💡 [핵심 패치] 우주항공(Aerospace) 등 특정 혁신 산업군은 가치주 함정에서 강제 탈출!
-            if "aerospace" in industry_sb or "defense" in industry_sb:
-                is_value_stock = False
             
             if is_value_stock:
                 stock_type_label = "🏛️ 전통 가치주 / 배당주"
@@ -155,11 +148,10 @@ with st.sidebar:
 
     peer_input = st.text_input("경쟁사 티커 (쉼표로 구분)", value=default_peers, help="AI가 자동으로 찾아낸 경쟁사입니다. 직접 수정하셔도 됩니다.")
 
-    # 캐시 강제 무력화
-    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_aerospace_fixed':
+    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_briefing_fixed':
         st.session_state.g_slider = default_g
         st.session_state.last_ticker = ticker_input
-        st.session_state.app_version = 'v_final_aerospace_fixed'
+        st.session_state.app_version = 'v_final_briefing_fixed'
         
     st.divider()
     
@@ -252,7 +244,6 @@ if ticker_input:
             if any(v_sec in sector for v_sec in value_sectors) or payout_ratio >= 0.40:
                 is_main_value_stock = True
                 
-            # 💡 [핵심 패치] 메인 화면 평가 모델도 우주항공은 무조건 성장주(DCF)로 판별!
             if "aerospace" in industry or "defense" in industry:
                 is_main_value_stock = False
             
@@ -380,7 +371,8 @@ if ticker_input:
             
             st.markdown(badge_html, unsafe_allow_html=True)
             
-            st.markdown("### 📊 주요 펀더멘털 및 기술 지표")
+            # 💡 [UI 패치] "주요 펀더멘털 및 기술 지표" 타이틀 수정
+            st.markdown("### 📊 주요 기술지표")
             with st.container(border=True):
                 c1, c2, c3, c4 = st.columns(4)
                 with c1: st.metric(label="현재 주가", value=fmt_price(current_price), delta=f"{drawdown:.2f}% (최고가대비)")
@@ -400,23 +392,36 @@ if ticker_input:
                 with c7: st.metric(label="52주 최고가", value=fmt_price(high_1y))
                 with c8: st.metric(label="52주 최저가", value=fmt_price(low_1y))
             
+            # 💡 [핵심 패치] N/A 상태에서도 무조건 브리핑이 나오도록 구조 변경
+            fund_status = "📊 주요 기술지표 브리핑"
+            fund_color = "#29b6f6" # 기본 파란색
+            fund_bg = "41, 182, 246"
+            
+            fund_desc = ""
             if final_fair_value != "N/A":
                 is_undervalued = margin_of_safety > 0
-                fund_color = "#3fb950" if is_undervalued else "#f85149"
-                fund_status = "🌟 [저평가] 적정 가치 대비 할인 거래 중" if is_undervalued else "🚨 [고평가] 적정 가치 대비 프리미엄 거래 중"
+                if is_undervalued:
+                    fund_color = "#3fb950"
+                    fund_bg = "63, 185, 80"
+                    fund_desc += f"현재 주가({fmt_price(current_price)})는 {model_used}로 산출된 적정 주가({fmt_price(final_fair_value)}) 대비 **싸게(저평가)** 거래되고 있습니다. "
+                else:
+                    fund_color = "#f85149"
+                    fund_bg = "248, 81, 73"
+                    fund_desc += f"현재 주가({fmt_price(current_price)})는 {model_used}로 산출된 적정 주가({fmt_price(final_fair_value)}) 대비 **비싸게(고평가)** 거래되고 있습니다. "
+            else:
+                fund_desc += f"현재 적자 혹은 현금흐름 부족으로 인해 명확한 적정 주가를 산출하기 어렵습니다. "
                 
-                fund_desc = f"현재 주가({fmt_price(current_price)})는 {model_used}로 산출된 적정 주가({fmt_price(final_fair_value)}) 대비 **{'싸게' if is_undervalued else '비싸게'}** 거래되고 있습니다. "
-                if roe is not None:
-                    if roe > 0.15: fund_desc += "ROE가 15%를 초과하여 자본 배분 수익성이 매우 우수하며, "
-                    else: fund_desc += "ROE가 15% 미만으로 자본 수익성은 평범하거나 다소 아쉬운 수준입니다. "
-                fund_desc += f"최근 1년 동안 최고가 대비 최대 {mdd:.1f}% 하락한 변동성이 있었습니다."
-                
-                st.markdown(f"""
-                <div style="padding: 15px; border-radius: 5px; margin-top: 10px; margin-bottom: 20px; border-left: 4px solid {fund_color}; background-color: rgba({'63, 185, 80' if is_undervalued else '248, 81, 73'}, 0.1);">
-                    <h4 style="margin-top: 0; color: {fund_color};">{fund_status}</h4>
-                    <p style="margin-bottom: 0; font-size: 0.95rem; color: #c9d1d9;">{fund_desc}</p>
-                </div>
-                """, unsafe_allow_html=True)
+            if roe is not None:
+                if roe > 0.15: fund_desc += "ROE가 15%를 초과하여 자본 배분 수익성이 매우 우수하며, "
+                else: fund_desc += "ROE가 15% 미만으로 자본 수익성은 평범하거나 다소 아쉬운 수준입니다. "
+            fund_desc += f"최근 1년 동안 최고가 대비 최대 {mdd:.1f}% 하락한 변동성이 있었습니다."
+            
+            st.markdown(f"""
+            <div style="padding: 15px; border-radius: 5px; margin-top: 10px; margin-bottom: 20px; border-left: 4px solid {fund_color}; background-color: rgba({fund_bg}, 0.1);">
+                <h4 style="margin-top: 0; color: {fund_color};">{fund_status}</h4>
+                <p style="margin-bottom: 0; font-size: 0.95rem; color: #c9d1d9;">{fund_desc}</p>
+            </div>
+            """, unsafe_allow_html=True)
                     
             st.markdown("<br>", unsafe_allow_html=True)
             
