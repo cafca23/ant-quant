@@ -362,6 +362,9 @@ if ticker_input:
             st.markdown(dashboard_html, unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
             
+            # ==========================================
+            # 💡 [툴팁 고도화] 펀더멘털 및 기술 지표 설명 추가
+            # ==========================================
             st.markdown("### 📊 주요 펀더멘털 및 기술 지표")
             with st.container(border=True):
                 c1, c2, c3, c4 = st.columns(4)
@@ -369,12 +372,15 @@ if ticker_input:
                 with c2: st.metric(label="적정 주가", value=f"${value_graham:,.2f}" if value_graham != "N/A" else "N/A", 
                                    delta=f"{margin_of_safety:.2f}% (안전마진)" if margin_of_safety != "N/A" else None)
                 with c3: st.metric(label="1년 MDD (최대 낙폭)", value=f"{mdd:.2f}%", delta="Max Drawdown", delta_color="inverse")
-                with c4: st.metric(label="EPS (주당순이익)", value=f"${eps:,.2f}" if eps else "N/A")
+                with c4: st.metric(label="EPS (주당순이익)", value=f"${eps:,.2f}" if eps else "N/A", 
+                                   help="1주당 회사가 벌어들인 순이익을 의미해요. 숫자가 클수록 회사의 기업 가치가 크고, 배당 줄 수 있는 여유가 늘어났다고 볼 수 있어요.")
                     
             with st.container(border=True):
                 c5, c6, c7, c8 = st.columns(4)
-                with c5: st.metric(label="PBR", value=pbr if isinstance(pbr, str) else f"{pbr:.2f}")
-                with c6: st.metric(label="ROE", value=f"{roe*100:.2f}%" if roe is not None else "N/A")
+                with c5: st.metric(label="PBR", value=pbr if isinstance(pbr, str) else f"{pbr:.2f}", 
+                                   help="주가가 1주당 장부상 순자산가치의 몇 배로 거래되는지 나타냅니다. 1 미만이면 회사를 다 팔아도 남는 돈보다 주가가 싸다는 뜻(저평가)입니다.")
+                with c6: st.metric(label="ROE", value=f"{roe*100:.2f}%" if roe is not None else "N/A", 
+                                   help="회사가 주주들의 돈(자본)을 굴려서 1년간 얼마를 벌었는지 보여주는 핵심 수익성 지표입니다. (통상 15% 이상이면 우량 기업으로 평가)")
                 with c7: st.metric(label="52주 최고가", value=f"${high_1y:,.2f}")
                 with c8: st.metric(label="52주 최저가", value=f"${low_1y:,.2f}")
                     
@@ -413,10 +419,14 @@ if ticker_input:
                 
             with st.container(border=True):
                 pc1, pc2, pc3, pc4 = st.columns(4)
-                with pc1: st.metric(label="PEG Ratio (성장성 대비 가치)", value=peg_val, delta=peg_delta, delta_color=peg_color)
-                with pc2: st.metric(label="Free Cash Flow (잉여현금흐름)", value=fcf_val, delta=fcf_delta, delta_color=fcf_color)
-                with pc3: st.metric(label="Payout Ratio (배당 성향)", value=payout_val, delta=payout_delta, delta_color=payout_color)
-                with pc4: st.metric(label="Inst. Ownership (기관 보유율)", value=inst_val, delta=inst_delta, delta_color=inst_color)
+                with pc1: st.metric(label="PEG Ratio (성장성 대비 가치)", value=peg_val, delta=peg_delta, delta_color=peg_color, 
+                                    help="PER(주가수익비율)을 이익성장률로 나눈 값입니다. 보통 1.0 이하이면 기업의 미래 성장 속도에 비해 현재 주가가 싸다(저평가)고 판단합니다.")
+                with pc2: st.metric(label="Free Cash Flow (잉여현금흐름)", value=fcf_val, delta=fcf_delta, delta_color=fcf_color, 
+                                    help="회사가 필수적인 투자를 다 하고도 통장에 남는 순수한 잉여 여윳돈입니다. 이 돈으로 배당을 주거나 빚을 갚을 수 있어 아주 중요합니다.")
+                with pc3: st.metric(label="Payout Ratio (배당 성향)", value=payout_val, delta=payout_delta, delta_color=payout_color, 
+                                    help="회사가 한 해 동안 번 순이익 중에서 몇 %를 주주들에게 배당금으로 나눠주는지를 나타냅니다. 너무 높으면 미래 투자가 어렵고 배당 삭감 위험이 있습니다.")
+                with pc4: st.metric(label="Inst. Ownership (기관 보유율)", value=inst_val, delta=inst_delta, delta_color=inst_color, 
+                                    help="월가 기관 투자자(헤지펀드, 연기금 등)들이 이 회사 주식을 얼마나 쥐고 있는지를 나타냅니다. 50% 이상이면 주도적 매수세가 있다고 봅니다.")
                 
             st.markdown("<br>", unsafe_allow_html=True)
 
