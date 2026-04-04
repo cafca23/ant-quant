@@ -97,7 +97,7 @@ PEER_MAP = {
 
 with st.sidebar:
     st.markdown("### ⚙️ 분석 설정")
-    ticker_input = st.text_input("종목 티커 입력 (예: AAPL, KO, NVDA)", value="ORCL")
+    ticker_input = st.text_input("종목 티커 입력 (예: AAPL, KO, FLY)", value="ORCL")
     
     currency_opt = st.radio("💱 표시 통화", ["$ 달러", "₩ 원화"], horizontal=True)
     is_krw = currency_opt == "₩ 원화"
@@ -132,7 +132,6 @@ with st.sidebar:
             if any(v_sec in sector_sb for v_sec in value_sectors) or payout_sb >= 0.40:
                 is_value_stock = True
             
-            # 💡 [신규] 종목별 성장률 맞춤 가이드라인 생성
             if is_value_stock:
                 stock_type_label = "🏛️ 전통 가치주 / 배당주"
                 guide_text = "성장이 둔화된 성숙한 캐시카우 기업입니다. 워런 버핏식 보수적 평가를 위해 **3% ~ 5%** 내외의 낮은 성장률로 강제 세팅하는 것을 강력히 권장합니다."
@@ -149,11 +148,10 @@ with st.sidebar:
 
     peer_input = st.text_input("경쟁사 티커 (쉼표로 구분)", value=default_peers, help="AI가 자동으로 찾아낸 경쟁사입니다. 직접 수정하셔도 됩니다.")
 
-    # 캐시 강제 무력화 (버전 코드 삽입)
-    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_growth_guide':
+    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_fly_ui_fixed':
         st.session_state.g_slider = default_g
         st.session_state.last_ticker = ticker_input
-        st.session_state.app_version = 'v_final_growth_guide'
+        st.session_state.app_version = 'v_final_fly_ui_fixed'
         
     st.divider()
     
@@ -164,7 +162,6 @@ with st.sidebar:
     
     st.divider()
     
-    # 💡 [신규] 성장률 세팅 가이드라인 출력 영역
     st.markdown("### 🌱 성장률(g) 세팅 가이드")
     st.markdown(f"**🤖 AI 종목 판독:** `{stock_type_label}`")
     st.info(guide_text)
@@ -172,11 +169,14 @@ with st.sidebar:
     def set_g(val): st.session_state.g_slider = val
 
     g = st.slider("예상 성장률 (g) %", min_value=0.0, max_value=50.0, step=0.5, key="g_slider", help="기업의 향후 5~10년 기대 성장률")
+    
+    # 💡 [UI 패치] 버튼 순서 오름차순(5, 10, 20, 30)으로 변경
     c1, c2, c3, c4 = st.columns(4)
-    c1.button("10", on_click=set_g, args=(10.0,), width="stretch")
-    c2.button("20", on_click=set_g, args=(20.0,), width="stretch")
-    c3.button("30", on_click=set_g, args=(30.0,), width="stretch")
-    c4.button("5", on_click=set_g, args=(5.0,), width="stretch")
+    c1.button("5", on_click=set_g, args=(5.0,), width="stretch")
+    c2.button("10", on_click=set_g, args=(10.0,), width="stretch")
+    c3.button("20", on_click=set_g, args=(20.0,), width="stretch")
+    c4.button("30", on_click=set_g, args=(30.0,), width="stretch")
+    
     st.button("🔄 SGR 기반 (AI추천)", on_click=set_g, args=(default_g,), width="stretch")
     st.caption(sgr_caption)
 
@@ -204,8 +204,9 @@ if ticker_input:
     try:
         info, hist, hist_10y, hist_weekly = get_stock_market_data(ticker)
         
-        if hist.empty or len(hist) < 200:
-            st.error("데이터가 부족하거나 티커가 올바르지 않습니다.")
+        # 💡 [로직 패치] 신규 상장주 입구컷 해제 (200일 -> 20일 완화)
+        if hist.empty or len(hist) < 20:
+            st.error("데이터가 부족하거나 티커가 올바르지 않습니다. (신규 상장 종목은 최소 20일의 거래 데이터가 필요합니다.)")
         else:
             hist['SMA50'] = hist['Close'].rolling(window=50).mean()
             hist['SMA200'] = hist['Close'].rolling(window=200).mean()
@@ -217,8 +218,9 @@ if ticker_input:
             hist['OBV'] = (np.sign(hist['Close'].diff()) * hist['Volume']).fillna(0).cumsum()
 
             current_price = info.get('currentPrice', hist['Close'].iloc[-1])
-            sma50_val = hist['SMA50'].iloc[-1]
-            sma200_val = hist['SMA200'].iloc[-1]
+            # 데이터 부족 시 SMA는 NaN으로 유연하게 처리
+            sma50_val = hist['SMA50'].iloc[-1] if len(hist) >= 50 else np.nan
+            sma200_val = hist['SMA200'].iloc[-1] if len(hist) >= 200 else np.nan
             rsi_val = hist['RSI'].iloc[-1]
             
             eps = info.get('trailingEps', info.get('forwardEps', 0))
@@ -330,7 +332,7 @@ if ticker_input:
                 elif current_price > sma50_val and sma50_val <= sma200_val: score += 1; checklist.append({"status": "info", "category": "일봉 추세", "desc": "바닥 반등 시작", "score": "+1"})
                 elif current_price <= sma50_val and current_price > sma200_val: score += 1; checklist.append({"status": "info", "category": "일봉 추세", "desc": "장기 상승장 속 조정 (눌림목)", "score": "+1"})
                 else: checklist.append({"status": "fail", "category": "일봉 추세", "desc": "역배열 하락세", "score": "0"})
-            else: checklist.append({"status": "fail", "category": "일봉 추세", "desc": "추세 판독 불가", "score": "0"})
+            else: checklist.append({"status": "fail", "category": "일봉 추세", "desc": "추세 판독 불가 (신규 상장 데이터 부족)", "score": "0"})
                 
             if pd.notna(rsi_val) and rsi_val < 70: score += 1; checklist.append({"status": "pass", "category": "단기 수급", "desc": f"RSI 과열 아님 ({rsi_val:.1f})", "score": "+1"})
             else: checklist.append({"status": "fail", "category": "단기 수급", "desc": "RSI 단기 과열", "score": "0"})
@@ -412,7 +414,8 @@ if ticker_input:
             peer_df = get_peers_data(ticker, peer_input)
             median_pe_val = peer_df['Fwd P/E'].median() if not peer_df.empty else None
 
-            st.markdown("### 👔 Professional Insights (전문가 핵심 지표)")
+            # 💡 [UI 패치] "전문가 핵심 지표" 타이틀 수정
+            st.markdown("### 👔 전문가 핵심 지표")
             with st.container(border=True):
                 pc1, pc2, pc3, pc4 = st.columns(4)
                 
@@ -471,7 +474,8 @@ if ticker_input:
                 with sc4: st.metric(label="OBV Trend (매집/분산 수급)", value="하단 차트 확인 📉", help="아래 일봉 차트 밑의 OBV 보조 차트를 통해 세력이 매집 중인지, 물량을 떠넘기고 있는지 시각적으로 확인하십시오.")
 
             smart_color = "#29b6f6" 
-            smart_status = "📊 [종합] 상대가치 및 스마트머니 수급 브리핑"
+            # 💡 [UI 패치] 스마트머니 브리핑 타이틀 수정
+            smart_status = "📊 전문가 핵심 지표 브리핑"
             smart_desc = ""
             
             if forward_pe and median_pe_val is not None and not np.isnan(median_pe_val):
@@ -638,6 +642,8 @@ if ticker_input:
                     <p style="margin-top: 8px; margin-bottom: 0; font-size: 0.8rem; color: #8b949e;">※ 기준: 최근 3개월(60거래일) 주가 등락률({recent_price_trend:.1f}%) 대비 OBV 추세 방향성 판독 결과</p>
                 </div>
                 """, unsafe_allow_html=True)
+            else:
+                st.info("💡 상장된 지 얼마 되지 않은 신규 종목이라 세력 매집(OBV) 60일 추세 판독을 위한 데이터가 부족합니다.")
                 
             if not df_wk.empty:
                 plot_df_wk = df_wk.copy()
