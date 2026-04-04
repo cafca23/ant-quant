@@ -126,11 +126,18 @@ with st.sidebar:
             roe_sb = info_sb.get('returnOnEquity', 0)
             payout_sb = info_sb.get('payoutRatio', 0) if info_sb.get('payoutRatio') else 0
             sector_sb = str(info_sb.get('sector', '')).lower()
+            industry_sb = str(info_sb.get('industry', '')).lower() # 세부 산업 정보 추가
             
             is_value_stock = False
             value_sectors = ["consumer defensive", "utilities", "energy", "real estate", "financial services", "basic materials", "industrials"]
+            
+            # 대분류 스캔
             if any(v_sec in sector_sb for v_sec in value_sectors) or payout_sb >= 0.40:
                 is_value_stock = True
+                
+            # 💡 [핵심 패치] 우주항공(Aerospace) 등 특정 혁신 산업군은 가치주 함정에서 강제 탈출!
+            if "aerospace" in industry_sb or "defense" in industry_sb:
+                is_value_stock = False
             
             if is_value_stock:
                 stock_type_label = "🏛️ 전통 가치주 / 배당주"
@@ -148,11 +155,11 @@ with st.sidebar:
 
     peer_input = st.text_input("경쟁사 티커 (쉼표로 구분)", value=default_peers, help="AI가 자동으로 찾아낸 경쟁사입니다. 직접 수정하셔도 됩니다.")
 
-    # 캐시 강제 무력화 (버전 코드 삽입)
-    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_median_fixed':
+    # 캐시 강제 무력화
+    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_aerospace_fixed':
         st.session_state.g_slider = default_g
         st.session_state.last_ticker = ticker_input
-        st.session_state.app_version = 'v_final_median_fixed'
+        st.session_state.app_version = 'v_final_aerospace_fixed'
         
     st.divider()
     
@@ -202,7 +209,6 @@ if ticker_input:
     try:
         info, hist, hist_10y, hist_weekly = get_stock_market_data(ticker)
         
-        # 신규 상장주(IPO) 입구컷 해제! (200일 -> 20일로 대폭 완화)
         if hist.empty or len(hist) < 20:
             st.error("데이터가 부족하거나 티커가 올바르지 않습니다. (신규 상장 종목은 최소 20일의 거래 데이터가 필요합니다.)")
         else:
@@ -229,6 +235,7 @@ if ticker_input:
             payout_ratio = info.get('payoutRatio', 0) if info.get('payoutRatio') else 0
             shares = info.get('sharesOutstanding', None)
             sector = str(info.get('sector', '')).lower()
+            industry = str(info.get('industry', '')).lower()
             
             ev_ebitda = info.get('enterpriseToEbitda', None)
             ps_ratio = info.get('priceToSalesTrailing12Months', None)
@@ -241,8 +248,13 @@ if ticker_input:
             
             is_main_value_stock = False
             value_sectors = ["consumer defensive", "utilities", "energy", "real estate", "financial services", "basic materials", "industrials"]
+            
             if any(v_sec in sector for v_sec in value_sectors) or payout_ratio >= 0.40:
                 is_main_value_stock = True
+                
+            # 💡 [핵심 패치] 메인 화면 평가 모델도 우주항공은 무조건 성장주(DCF)로 판별!
+            if "aerospace" in industry or "defense" in industry:
+                is_main_value_stock = False
             
             graham_value = "N/A"
             if eps is not None and eps > 0: graham_value = eps * (8.5 + 2 * g)
@@ -538,7 +550,6 @@ if ticker_input:
                     row_class = "peer-main-row" if is_main else ""
                     table_html += f"<tr class='{row_class}'><td>{row['Ticker']}</td><td>{fmt_price(row['Price'])}</td><td>{fmt_multi(row['Fwd P/E'])}</td><td>{fmt_multi(row['EV/EBITDA'])}</td><td>{fmt_multi(row['P/S'])}</td><td>{fmt_multi(row['EV/Rev'])}</td></tr>"
                 
-                # 💡 [핵심 패치] 이전에 증발했던 동종업계 중앙값 계산 4줄 완벽 복구
                 median_pe = peer_df['Fwd P/E'].median()
                 median_ev_ebitda = peer_df['EV/EBITDA'].median()
                 median_ps = peer_df['P/S'].median()
