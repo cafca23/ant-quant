@@ -143,10 +143,10 @@ with st.sidebar:
     peer_input = st.text_input("경쟁사 티커 (쉼표로 구분)", value=default_peers, help="AI가 자동으로 찾아낸 경쟁사입니다. 직접 수정하셔도 됩니다.")
 
     # 캐시 강제 무력화 (버전 코드 삽입)
-    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_obv_60days':
+    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_tooltips_restored':
         st.session_state.g_slider = default_g
         st.session_state.last_ticker = ticker_input
-        st.session_state.app_version = 'v_obv_60days'
+        st.session_state.app_version = 'v_final_tooltips_restored'
         
     st.divider()
     
@@ -203,7 +203,7 @@ if ticker_input:
             rs = gain / loss
             hist['RSI'] = 100 - (100 / (1 + rs))
             
-            # OBV (On-Balance Volume) 계산
+            # OBV 계산
             hist['OBV'] = (np.sign(hist['Close'].diff()) * hist['Volume']).fillna(0).cumsum()
 
             current_price = info.get('currentPrice', hist['Close'].iloc[-1])
@@ -362,49 +362,66 @@ if ticker_input:
             
             st.markdown(badge_html, unsafe_allow_html=True)
             
+            # ==========================================
+            # 💡 [툴팁 복구] 펀더멘털 및 기술 지표
+            # ==========================================
             st.markdown("### 📊 주요 펀더멘털 및 기술 지표")
             with st.container(border=True):
                 c1, c2, c3, c4 = st.columns(4)
                 with c1: st.metric(label="현재 주가", value=fmt_price(current_price), delta=f"{drawdown:.2f}% (최고가대비)")
-                with c2: st.metric(label=f"적정 주가 ({model_used})", value=fmt_price(final_fair_value) if final_fair_value != "N/A" else "N/A", delta=f"{margin_of_safety:.2f}% (안전마진)" if margin_of_safety != "N/A" else None)
+                with c2: st.metric(label=f"적정 주가 ({model_used})", value=fmt_price(final_fair_value) if final_fair_value != "N/A" else "N/A", 
+                                   delta=f"{margin_of_safety:.2f}% (안전마진)" if margin_of_safety != "N/A" else None,
+                                   help="테크/성장주는 현금흐름할인(DCF) 모델로, 가치/배당주는 그레이엄 모델로 자동 산출됩니다.")
                 with c3: st.metric(label="1년 MDD (최대 낙폭)", value=f"{mdd:.2f}%", delta="Max Drawdown", delta_color="inverse")
-                with c4: st.metric(label="EPS (주당순이익)", value=fmt_price(eps) if eps else "N/A")
+                with c4: st.metric(label="EPS (주당순이익)", value=fmt_price(eps) if eps else "N/A", 
+                                   help="1주당 회사가 벌어들인 순이익을 의미해요. 숫자가 클수록 회사의 기업 가치가 크고, 배당 줄 수 있는 여유가 늘어났다고 볼 수 있어요.")
                     
             with st.container(border=True):
                 c5, c6, c7, c8 = st.columns(4)
-                with c5: st.metric(label="PBR", value=pbr if isinstance(pbr, str) else f"{pbr:.2f}배")
-                with c6: st.metric(label="ROE", value=f"{roe*100:.2f}%" if roe is not None else "N/A")
+                with c5: st.metric(label="PBR", value=pbr if isinstance(pbr, str) else f"{pbr:.2f}배", 
+                                   help="주가가 1주당 장부상 순자산가치의 몇 배로 거래되는지 나타냅니다. 1 미만이면 회사를 다 팔아도 남는 돈보다 주가가 싸다는 뜻(저평가)입니다.")
+                with c6: st.metric(label="ROE", value=f"{roe*100:.2f}%" if roe is not None else "N/A", 
+                                   help="회사가 주주의 돈(자본)을 굴려서 1년간 얼마를 벌었는지 보여주는 핵심 수익성 지표입니다. (통상 15% 이상이면 우량 기업으로 평가)")
                 with c7: st.metric(label="52주 최고가", value=fmt_price(high_1y))
                 with c8: st.metric(label="52주 최저가", value=fmt_price(low_1y))
                     
             st.markdown("<br>", unsafe_allow_html=True)
             
+            # ==========================================
+            # 💡 [툴팁 복구] 전문가 핵심 지표, 상대가치, 스마트머니
+            # ==========================================
             st.markdown("### 👔 Professional Insights (전문가 핵심 지표)")
             with st.container(border=True):
                 pc1, pc2, pc3, pc4 = st.columns(4)
+                
                 peg_val = f"{peg_ratio:.2f}배" if peg_ratio else "N/A"
                 peg_delta = ("저평가 구간" if peg_ratio and peg_ratio <= 1.0 else "고평가 구간") if peg_ratio else None
+                peg_help_text = "PER(주가수익비율)을 이익성장률로 나눈 값입니다. 보통 1.0 이하이면 기업의 미래 성장 속도에 비해 현재 주가가 싸다(저평가)고 판단합니다."
+                if peg_ratio is None: 
+                    peg_help_text += "\n\n🚨 [N/A 발생 이유]\n야후 파이낸스에 향후 5년 이익성장률 추정치가 누락되어 있거나 해당 기업이 적자 상태이기 때문입니다."
+                
                 fcf_val = "N/A"
                 if fcf is not None:
                     fcf_conv = fcf * ex_rate if is_krw else fcf
                     if is_krw: fcf_val = f"₩{fcf_conv/1e12:.2f}조" if fcf_conv >= 1e12 else (f"₩{fcf_conv/1e8:.2f}억" if fcf_conv >= 1e8 else f"₩{fcf_conv:,.0f}")
                     else: fcf_val = f"${fcf/1e12:.2f}T" if fcf >= 1e12 else (f"${fcf/1e9:.2f}B" if fcf >= 1e9 else f"${fcf/1e6:.2f}M")
+                
                 payout_val = f"{payout_ratio * 100:.1f}%" if payout_ratio else "N/A"
                 inst_val = f"{info.get('heldPercentInstitutions', 0) * 100:.1f}%" if info.get('heldPercentInstitutions') else "N/A"
 
-                with pc1: st.metric(label="PEG Ratio (성장성 대비 가치)", value=peg_val, delta=peg_delta, delta_color="normal" if peg_ratio and peg_ratio <= 1.0 else "inverse")
-                with pc2: st.metric(label="Free Cash Flow (잉여현금흐름)", value=fcf_val, delta="현금창출 긍정적" if fcf and fcf > 0 else "우려", delta_color="normal" if fcf and fcf > 0 else "inverse")
-                with pc3: st.metric(label="Payout Ratio (배당 성향)", value=payout_val, delta="건전" if payout_ratio and payout_ratio <= 0.6 else "과부하 우려", delta_color="normal" if payout_ratio and payout_ratio <= 0.6 else "inverse")
-                with pc4: st.metric(label="Inst. Ownership (기관 보유율)", value=inst_val)
+                with pc1: st.metric(label="PEG Ratio (성장성 대비 가치)", value=peg_val, delta=peg_delta, delta_color="normal" if peg_ratio and peg_ratio <= 1.0 else "inverse", help=peg_help_text)
+                with pc2: st.metric(label="Free Cash Flow (잉여현금흐름)", value=fcf_val, delta="현금창출 긍정적" if fcf and fcf > 0 else "우려", delta_color="normal" if fcf and fcf > 0 else "inverse", help="회사가 필수적인 투자를 다 하고도 통장에 남는 순수한 잉여 여윳돈입니다. 이 돈으로 배당을 주거나 빚을 갚을 수 있어 아주 중요합니다.")
+                with pc3: st.metric(label="Payout Ratio (배당 성향)", value=payout_val, delta="건전" if payout_ratio and payout_ratio <= 0.6 else "과부하 우려", delta_color="normal" if payout_ratio and payout_ratio <= 0.6 else "inverse", help="순이익 중 주주들에게 배당금으로 나눠주는 비율입니다. 너무 높으면 미래 투자가 어렵고 배당 삭감 위험이 있습니다.")
+                with pc4: st.metric(label="Inst. Ownership (기관 보유율)", value=inst_val, help="월가 기관 투자자(헤지펀드, 연기금 등)들이 이 회사 주식을 얼마나 쥐고 있는지를 나타냅니다. 50% 이상이면 주도적 매수세가 있다고 봅니다.")
                 
                 st.markdown("<hr style='margin: 15px 0; border-color: #30363d;'>", unsafe_allow_html=True)
                 st.markdown("<p style='color:#8b949e; font-weight:bold; margin-bottom:10px;'>🔍 알파 스프레드 기반 상대가치 지표 (Relative Valuation Multiples)</p>", unsafe_allow_html=True)
                 
                 rc1, rc2, rc3, rc4 = st.columns(4)
-                with rc1: st.metric(label="EV/EBITDA (현금창출비율)", value=f"{ev_ebitda:.2f}배" if ev_ebitda else "N/A")
-                with rc2: st.metric(label="P/S Ratio (주가/매출액)", value=f"{ps_ratio:.2f}배" if ps_ratio else "N/A")
-                with rc3: st.metric(label="EV/Revenue (기업가치/매출)", value=f"{ev_revenue:.2f}배" if ev_revenue else "N/A")
-                with rc4: st.metric(label="Forward P/E (선행 PER)", value=f"{forward_pe:.2f}배" if forward_pe else "N/A")
+                with rc1: st.metric(label="EV/EBITDA (현금창출비율)", value=f"{ev_ebitda:.2f}배" if ev_ebitda else "N/A", help="기업가치(부채포함)를 영업이익(EBITDA)으로 나눈 값입니다. 보통 10배 이하일 때 저평가로 봅니다.")
+                with rc2: st.metric(label="P/S Ratio (주가/매출액)", value=f"{ps_ratio:.2f}배" if ps_ratio else "N/A", help="시가총액을 연간 매출액으로 나눈 배수입니다. 이익이 안 나는 고성장 기업의 상대적 몸값을 잴 때 필수적입니다.")
+                with rc3: st.metric(label="EV/Revenue (기업가치/매출)", value=f"{ev_revenue:.2f}배" if ev_revenue else "N/A", help="기업가치를 매출액으로 나눈 값으로, P/S보다 부채까지 고려하여 더 정교하게 몸값을 잽니다.")
+                with rc4: st.metric(label="Forward P/E (선행 PER)", value=f"{forward_pe:.2f}배" if forward_pe else "N/A", help="향후 1년 예상 순이익 대비 주가가 몇 배인지 나타냅니다. 과거 실적보다 미래의 기대치를 엿볼 수 있습니다.")
                 
                 st.markdown("<hr style='margin: 15px 0; border-color: #30363d;'>", unsafe_allow_html=True)
                 st.markdown("<p style='color:#e879f9; font-weight:bold; margin-bottom:10px;'>🕵️‍♂️ 월스트리트 스마트머니 & 심리 지표 (Smart Money & Sentiment)</p>", unsafe_allow_html=True)
@@ -426,16 +443,17 @@ if ticker_input:
                     earn_eval = "추정치 상향!" if earnings_growth > 0 else "추정치 둔화/하향"
                     earn_color = "normal" if earnings_growth > 0 else "inverse"
 
-                with sc1: st.metric(label="Short Interest (공매도 잔고 비율)", value=fmt_pct(short_pct), delta=short_eval, delta_color=short_color)
-                with sc2: st.metric(label="Insider Ownership (내부자 보유율)", value=fmt_pct(insider_pct))
-                with sc3: st.metric(label="Earnings Growth (실적/추정치 성장)", value=fmt_pct(earnings_growth), delta=earn_eval, delta_color=earn_color)
-                with sc4: st.metric(label="OBV Trend (매집/분산 수급)", value="하단 차트 확인 📉")
+                with sc1: st.metric(label="Short Interest (공매도 잔고 비율)", value=fmt_pct(short_pct), delta=short_eval, delta_color=short_color, help="유통 주식 중 공매도(하락 베팅)가 차지하는 비율입니다. 가치주는 3% 이상, 테크주는 10% 이상이면 위험 신호입니다.")
+                with sc2: st.metric(label="Insider Ownership (내부자 보유율)", value=fmt_pct(insider_pct), help="CEO 등 회사 내부자가 자사주를 얼마나 쥐고 있는지 보여줍니다. 숫자가 클수록, 그리고 최근에 늘어났을수록 강력한 매수 신호입니다.")
+                with sc3: st.metric(label="Earnings Growth (실적/추정치 성장)", value=fmt_pct(earnings_growth), delta=earn_eval, delta_color=earn_color, help="최근 월가 애널리스트들의 실적(순이익) 추정치 증가율입니다. 양수(+)면 기관들의 목표가가 올라가고 있다는 뜻입니다.")
+                with sc4: st.metric(label="OBV Trend (매집/분산 수급)", value="하단 차트 확인 📉", help="아래 일봉 차트 밑의 OBV 보조 차트를 통해 세력이 매집 중인지, 물량을 떠넘기고 있는지 시각적으로 확인하십시오.")
 
             with st.expander("💡 알파 스프레드 4대 핵심 지표 완벽 해독 가이드", expanded=False):
                 ev_e_text = f"{ev_ebitda:.2f}배" if ev_ebitda else "N/A"
                 ps_text = f"{ps_ratio:.2f}배" if ps_ratio else "N/A"
                 ev_r_text = f"{ev_revenue:.2f}배" if ev_revenue else "N/A"
                 fwd_pe_text = f"{forward_pe:.2f}배" if forward_pe else "N/A"
+                
                 ev_e_years = f"약 {int(ev_ebitda)}년" if ev_ebitda else "알 수 없는 기간"
                 ev_e_eval = "꽤 비싼(고평가)" if ev_ebitda and ev_ebitda > 10 else "저렴한(저평가)"
                 pe_eval = "시장 평균 대비 비싸게" if forward_pe and forward_pe > 15 else "시장 평균 대비 저렴하게"
@@ -538,9 +556,6 @@ if ticker_input:
             
             with st.container(border=True): st.plotly_chart(fig, use_container_width=True)
             
-            # ==========================================
-            # 💡 [핵심 패치] OBV 판독 시야 60일(3개월) 확장 로직
-            # ==========================================
             if len(plot_hist_1y) >= 60:
                 lookback = 60
                 recent_price_trend = (plot_hist_1y['Close'].iloc[-1] - plot_hist_1y['Close'].iloc[-lookback]) / plot_hist_1y['Close'].iloc[-lookback] * 100
