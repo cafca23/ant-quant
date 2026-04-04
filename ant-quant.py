@@ -124,12 +124,23 @@ with st.sidebar:
                 if ai_peers: 
                     default_peers = ai_peers
             
+            # 💡 [핵심] 가치주 성장률 뻥튀기 방어 로직
             roe_sb = info_sb.get('returnOnEquity', 0)
             payout_sb = info_sb.get('payoutRatio', 0)
+            sector_sb = info_sb.get('sector', '')
+            peg_sb = info_sb.get('pegRatio', 0)
+            
+            is_growth_sb = (payout_sb < 0.15) or ("Technology" in sector_sb) or ("Communication" in sector_sb) or (peg_sb and peg_sb > 1.5)
+            
             if roe_sb is not None and roe_sb > 0:
-                sgr = max(5.0, min(roe_sb * (1 - payout_sb) * 100, 50.0))
-                default_g = float(round(sgr, 1))
-                sgr_caption = f"💡 자동 추천 성장률(SGR 기반): {default_g}%"
+                if not is_growth_sb:
+                    # 가치/배당주는 ROE의 함정에 속지 않고 5.0%로 보수적 강제 세팅
+                    default_g = 5.0
+                    sgr_caption = f"💡 전통 가치주 보수적 세팅: {default_g}% (SGR 제한)"
+                else:
+                    sgr = max(5.0, min(roe_sb * (1 - payout_sb) * 100, 50.0))
+                    default_g = float(round(sgr, 1))
+                    sgr_caption = f"💡 자동 추천 성장률(SGR 기반): {default_g}%"
         except: pass
 
     peer_input = st.text_input("경쟁사 티커 (쉼표로 구분)", value=default_peers, help="AI가 자동으로 찾아낸 경쟁사입니다. 직접 수정하셔도 됩니다.")
@@ -336,9 +347,6 @@ if ticker_input:
             
             st.markdown(badge_html, unsafe_allow_html=True)
             
-            # ==========================================
-            # 💡 [툴팁 복구] 펀더멘털 및 기술 지표 
-            # ==========================================
             st.markdown("### 📊 주요 펀더멘털 및 기술 지표")
             with st.container(border=True):
                 c1, c2, c3, c4 = st.columns(4)
@@ -361,14 +369,10 @@ if ticker_input:
                     
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # ==========================================
-            # 💡 [툴팁 복구 & PEG N/A 로직 추가] 전문가 핵심 지표
-            # ==========================================
             st.markdown("### 👔 Professional Insights (전문가 핵심 지표)")
             with st.container(border=True):
                 pc1, pc2, pc3, pc4 = st.columns(4)
                 
-                # PEG Ratio 로직 및 동적 툴팁
                 peg_val = f"{peg_ratio:.2f}배" if peg_ratio else "N/A"
                 peg_delta = ("저평가 구간" if peg_ratio and peg_ratio <= 1.0 else "고평가 구간") if peg_ratio else None
                 peg_help_text = "PER(주가수익비율)을 이익성장률로 나눈 값입니다. 보통 1.0 이하이면 기업의 미래 성장 속도에 비해 현재 주가가 싸다(저평가)고 판단합니다."
@@ -398,11 +402,7 @@ if ticker_input:
                 with rc3: st.metric(label="EV/Revenue (기업가치/매출)", value=f"{ev_revenue:.2f}배" if ev_revenue else "N/A", help="기업가치를 매출액으로 나눈 값으로, P/S보다 부채까지 고려하여 더 정교하게 몸값을 잽니다.")
                 with rc4: st.metric(label="Forward P/E (선행 PER)", value=f"{forward_pe:.2f}배" if forward_pe else "N/A", help="향후 1년 예상 순이익 대비 주가가 몇 배인지 나타냅니다. 과거 실적보다 미래의 기대치를 엿볼 수 있습니다.")
             
-            # ==========================================
-            # 💡 [신규] 동적 가이드 아코디언 버튼 (st.expander)
-            # ==========================================
             with st.expander("💡 알파 스프레드 4대 핵심 지표 완벽 해독 가이드", expanded=False):
-                # 동적 해석 변수 세팅
                 ev_e_text = f"{ev_ebitda:.2f}배" if ev_ebitda else "N/A"
                 ps_text = f"{ps_ratio:.2f}배" if ps_ratio else "N/A"
                 ev_r_text = f"{ev_revenue:.2f}배" if ev_revenue else "N/A"
