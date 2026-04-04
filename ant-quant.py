@@ -60,13 +60,10 @@ with st.sidebar:
     
     st.divider()
     
-    # 💡 실시간 금리 기반 할인율(WACC) 세팅
     st.markdown("### 🌐 거시경제(매크로) 연동")
     st.info(f"실시간 美 10년물 국채 금리: **{risk_free_rate:.2f}%**")
-    default_wacc = round(risk_free_rate + 5.0, 1) 
-    
-    discount_rate = st.slider("DCF 할인율 (금리 반영) %", min_value=1.0, max_value=20.0, value=default_wacc, step=0.1, 
-                              help="미래의 현금흐름을 현재 가치로 땡겨올 때 깎는 비율입니다. (자동으로 '국채 금리 + 5%' 로 셋팅됩니다.)")
+    discount_rate = round(risk_free_rate + 5.0, 1) 
+    st.caption(f"💡 AI 자동 세팅 할인율: **{discount_rate}%** (국채 금리 + 시장리스크 5%)")
     
     st.divider()
     
@@ -165,11 +162,11 @@ if ticker_input:
             if is_growth and dcf_value != "N/A":
                 final_fair_value = dcf_value
                 model_used = "DCF(현금흐름할인) 모델"
-                badge_html = "<div class='badge badge-growth'>🚀 AI 판독: 테크/성장주 트랙 적용 중</div>"
+                badge_html = "<div class='badge badge-growth'>🚀 AI 판독: 테크/성장주 트랙 자동 적용 중</div>"
             else:
                 final_fair_value = graham_value
                 model_used = "벤저민 그레이엄 모델"
-                badge_html = "<div class='badge badge-value'>🏛️ AI 판독: 전통 가치/배당주 트랙 적용 중</div>"
+                badge_html = "<div class='badge badge-value'>🏛️ AI 판독: 전통 가치/배당주 트랙 자동 적용 중</div>"
                 
             margin_of_safety = "N/A"
             if final_fair_value != "N/A":
@@ -295,7 +292,7 @@ if ticker_input:
             with st.container(border=True):
                 pc1, pc2, pc3, pc4 = st.columns(4)
                 peg_val = f"{peg_ratio:.2f}" if peg_ratio else "N/A"
-                peg_delta = ("저평가 구간" if peg_ratio <= 1.0 else "고평가 구간") if peg_ratio else None
+                peg_delta = ("저평가 구간" if peg_ratio and peg_ratio <= 1.0 else "고평가 구간") if peg_ratio else None
                 
                 fcf_val = "N/A"
                 if fcf is not None:
@@ -306,18 +303,19 @@ if ticker_input:
                 payout_val = f"{payout_ratio * 100:.1f}%" if payout_ratio else "N/A"
                 inst_val = f"{info.get('heldPercentInstitutions', 0) * 100:.1f}%" if info.get('heldPercentInstitutions') else "N/A"
 
-                with pc1: st.metric(label="PEG Ratio", value=peg_val, delta=peg_delta, delta_color="normal" if peg_ratio and peg_ratio <= 1.0 else "inverse", help="이익성장률 대비 주가. 1.0 이하면 저평가로 봅니다.")
-                with pc2: st.metric(label="Free Cash Flow", value=fcf_val, delta="현금창출 긍정적" if fcf and fcf > 0 else "우려", delta_color="normal" if fcf and fcf > 0 else "inverse", help="필수 투자를 마치고 남은 순수 잉여현금입니다.")
-                with pc3: st.metric(label="Payout Ratio", value=payout_val, delta="건전" if payout_ratio and payout_ratio <= 0.6 else "과부하 우려", delta_color="normal" if payout_ratio and payout_ratio <= 0.6 else "inverse")
-                with pc4: st.metric(label="Inst. Ownership", value=inst_val, help="월가 기관 투자자들의 보유 비율입니다.")
+                # 💡 [핵심] 괄호 한글 라벨 완벽 복구
+                with pc1: st.metric(label="PEG Ratio (성장성 대비 가치)", value=peg_val, delta=peg_delta, delta_color="normal" if peg_ratio and peg_ratio <= 1.0 else "inverse", help="이익성장률 대비 주가. 1.0 이하면 저평가로 봅니다.")
+                with pc2: st.metric(label="Free Cash Flow (잉여현금흐름)", value=fcf_val, delta="현금창출 긍정적" if fcf and fcf > 0 else "우려", delta_color="normal" if fcf and fcf > 0 else "inverse", help="필수 투자를 마치고 남은 순수 잉여현금입니다.")
+                with pc3: st.metric(label="Payout Ratio (배당 성향)", value=payout_val, delta="건전" if payout_ratio and payout_ratio <= 0.6 else "과부하 우려", delta_color="normal" if payout_ratio and payout_ratio <= 0.6 else "inverse", help="순이익 중 배당금으로 지급하는 비율입니다.")
+                with pc4: st.metric(label="Inst. Ownership (기관 보유율)", value=inst_val, help="월가 기관 투자자들의 보유 비율입니다.")
                 
             st.markdown("<br>", unsafe_allow_html=True)
             
             # ==========================================
-            # 💡 [복구 완료] 3대 핵심 차트 렌더링 섹션
+            # 3대 핵심 차트 렌더링 섹션
             # ==========================================
 
-            # 1. 최근 10년 주가 vs 내재가치 추이 (DCF/그레이엄 동기화)
+            # 1. 최근 10년 주가 vs 내재가치 추이 
             if not hist_10y.empty and final_fair_value != "N/A":
                 df_10y = hist_10y[['Close']].copy()
                 df_10y.rename(columns={'Close': 'Price'}, inplace=True)
@@ -325,13 +323,10 @@ if ticker_input:
                 latest_date = df_10y.index[-1]
                 years_diff = (latest_date - df_10y.index).days / 365.25
                 
-                # 할인율을 역산하여 과거의 내재가치 궤적을 그림
                 df_10y['Value'] = final_fair_value / ((1 + g/100) ** years_diff)
-                
                 df_10y['Over_Top'] = np.maximum(df_10y['Price'], df_10y['Value'])
                 df_10y['Under_Bottom'] = np.minimum(df_10y['Price'], df_10y['Value'])
 
-                # 원화 스위치 동기화
                 if is_krw:
                     df_10y['Value'] *= ex_rate
                     df_10y['Over_Top'] *= ex_rate
@@ -420,9 +415,7 @@ if ticker_input:
                 with st.container(border=True):
                     st.plotly_chart(fig_wk, use_container_width=True)
 
-            # ==========================================
             # --- AI 수석 비서 브리핑 ---
-            # ==========================================
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("### 🤖 수석 비서의 AI 종합 브리핑 (Tier 1)")
             if st.button("✨ 퀀트 데이터 기반 AI 분석 보고서 작성", type="primary", width="stretch"):
