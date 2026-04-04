@@ -108,6 +108,8 @@ with st.sidebar:
     default_peers = "MSFT, GOOGL, AAPL" 
     default_g = 15.0
     sgr_caption = "💡 AI 추천 성장률: 정보 없음 (기본값 15.0% 적용)"
+    stock_type_label = "분석 중..."
+    guide_text = "티커를 입력하면 알맞은 성장률 가이드를 제공합니다."
     
     if ticker_input:
         ticker_for_sidebar = ticker_input.upper()
@@ -130,11 +132,16 @@ with st.sidebar:
             if any(v_sec in sector_sb for v_sec in value_sectors) or payout_sb >= 0.40:
                 is_value_stock = True
             
-            if roe_sb is not None and roe_sb > 0:
-                if is_value_stock:
-                    default_g = 5.0
-                    sgr_caption = f"💡 전통 가치주 보수적 세팅: {default_g}% (강제 고정)"
-                else:
+            # 💡 [신규] 종목별 성장률 맞춤 가이드라인 생성
+            if is_value_stock:
+                stock_type_label = "🏛️ 전통 가치주 / 배당주"
+                guide_text = "성장이 둔화된 성숙한 캐시카우 기업입니다. 워런 버핏식 보수적 평가를 위해 **3% ~ 5%** 내외의 낮은 성장률로 강제 세팅하는 것을 강력히 권장합니다."
+                default_g = 5.0
+                sgr_caption = f"💡 전통 가치주 보수적 세팅: {default_g}% (강제 고정)"
+            else:
+                stock_type_label = "🚀 테크 / 고성장주"
+                guide_text = "혁신과 성장이 기대되는 기업입니다. 하단의 'SGR 기반(AI추천)' 버튼을 누르시거나, 본인의 기대치에 따라 **10% ~ 20% 이상**의 성장을 가정해 볼 수 있습니다."
+                if roe_sb is not None and roe_sb > 0:
                     sgr = max(5.0, min(roe_sb * (1 - payout_sb) * 100, 50.0))
                     default_g = float(round(sgr, 1))
                     sgr_caption = f"💡 자동 추천 성장률(SGR 기반): {default_g}%"
@@ -142,10 +149,11 @@ with st.sidebar:
 
     peer_input = st.text_input("경쟁사 티커 (쉼표로 구분)", value=default_peers, help="AI가 자동으로 찾아낸 경쟁사입니다. 직접 수정하셔도 됩니다.")
 
-    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_reports_added':
+    # 캐시 강제 무력화 (버전 코드 삽입)
+    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_growth_guide':
         st.session_state.g_slider = default_g
         st.session_state.last_ticker = ticker_input
-        st.session_state.app_version = 'v_final_reports_added'
+        st.session_state.app_version = 'v_final_growth_guide'
         
     st.divider()
     
@@ -155,6 +163,11 @@ with st.sidebar:
     st.caption(f"💡 AI 자동 세팅 할인율: **{discount_rate}%** (국채 금리 + 시장리스크 5%)")
     
     st.divider()
+    
+    # 💡 [신규] 성장률 세팅 가이드라인 출력 영역
+    st.markdown("### 🌱 성장률(g) 세팅 가이드")
+    st.markdown(f"**🤖 AI 종목 판독:** `{stock_type_label}`")
+    st.info(guide_text)
         
     def set_g(val): st.session_state.g_slider = val
 
@@ -356,9 +369,6 @@ if ticker_input:
             
             st.markdown(badge_html, unsafe_allow_html=True)
             
-            # ==========================================
-            # 1. 주요 펀더멘털 및 기술 지표
-            # ==========================================
             st.markdown("### 📊 주요 펀더멘털 및 기술 지표")
             with st.container(border=True):
                 c1, c2, c3, c4 = st.columns(4)
@@ -379,7 +389,6 @@ if ticker_input:
                 with c7: st.metric(label="52주 최고가", value=fmt_price(high_1y))
                 with c8: st.metric(label="52주 최저가", value=fmt_price(low_1y))
             
-            # 💡 [신규] 펀더멘털 자동 분석 리포트
             if final_fair_value != "N/A":
                 is_undervalued = margin_of_safety > 0
                 fund_color = "#3fb950" if is_undervalued else "#f85149"
@@ -400,13 +409,9 @@ if ticker_input:
                     
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # 데이터를 먼저 로드 (스마트머니 리포트에서 활용하기 위함)
             peer_df = get_peers_data(ticker, peer_input)
             median_pe_val = peer_df['Fwd P/E'].median() if not peer_df.empty else None
 
-            # ==========================================
-            # 2. 전문가 핵심 지표, 상대가치, 스마트머니
-            # ==========================================
             st.markdown("### 👔 Professional Insights (전문가 핵심 지표)")
             with st.container(border=True):
                 pc1, pc2, pc3, pc4 = st.columns(4)
@@ -465,8 +470,7 @@ if ticker_input:
                 with sc3: st.metric(label="Earnings Growth (실적/추정치 성장)", value=fmt_pct(earnings_growth), delta=earn_eval, delta_color=earn_color, help="최근 월가 애널리스트들의 실적(순이익) 추정치 증가율입니다. 양수(+)면 기관들의 목표가가 올라가고 있다는 뜻입니다.")
                 with sc4: st.metric(label="OBV Trend (매집/분산 수급)", value="하단 차트 확인 📉", help="아래 일봉 차트 밑의 OBV 보조 차트를 통해 세력이 매집 중인지, 물량을 떠넘기고 있는지 시각적으로 확인하십시오.")
 
-            # 💡 [신규] 전문가 상대가치 및 스마트머니 자동 분석 리포트
-            smart_color = "#29b6f6" # Blue
+            smart_color = "#29b6f6" 
             smart_status = "📊 [종합] 상대가치 및 스마트머니 수급 브리핑"
             smart_desc = ""
             
@@ -535,11 +539,7 @@ if ticker_input:
                     row_class = "peer-main-row" if is_main else ""
                     table_html += f"<tr class='{row_class}'><td>{row['Ticker']}</td><td>{fmt_price(row['Price'])}</td><td>{fmt_multi(row['Fwd P/E'])}</td><td>{fmt_multi(row['EV/EBITDA'])}</td><td>{fmt_multi(row['P/S'])}</td><td>{fmt_multi(row['EV/Rev'])}</td></tr>"
                 
-                median_pe = peer_df['Fwd P/E'].median()
-                median_ev_ebitda = peer_df['EV/EBITDA'].median()
-                median_ps = peer_df['P/S'].median()
-                median_ev_rev = peer_df['EV/Rev'].median()
-                table_html += f"<tr class='peer-median-row'><td>산업 중앙값 (Median)</td><td>-</td><td>{fmt_multi(median_pe)}</td><td>{fmt_multi(median_ev_ebitda)}</td><td>{fmt_multi(median_ps)}</td><td>{fmt_multi(median_ev_rev)}</td></tr></table>"
+                table_html += f"<tr class='peer-median-row'><td>산업 중앙값 (Median)</td><td>-</td><td>{fmt_multi(median_pe_val)}</td><td>{fmt_multi(median_ev_ebitda)}</td><td>{fmt_multi(median_ps)}</td><td>{fmt_multi(median_ev_rev)}</td></tr></table>"
                 
                 with st.container(border=True): st.markdown(table_html, unsafe_allow_html=True)
             else:
