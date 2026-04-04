@@ -27,15 +27,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 💡 [핵심] 실시간 거시경제 데이터 (환율 & 미국 10년물 국채 금리)
+# 💡 실시간 거시경제 데이터 (환율 & 미국 10년물 국채 금리)
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_macro_data():
-    try:
-        usdkrw = yf.Ticker("USDKRW=X").history(period="1d")['Close'].iloc[-1]
+    try: usdkrw = yf.Ticker("USDKRW=X").history(period="1d")['Close'].iloc[-1]
     except: usdkrw = 1350.0
-    try:
-        tnx = yf.Ticker("^TNX").history(period="1d")['Close'].iloc[-1]
-    except: tnx = 4.2  # 통신 실패 시 기본 금리
+    try: tnx = yf.Ticker("^TNX").history(period="1d")['Close'].iloc[-1]
+    except: tnx = 4.2  
     return float(usdkrw), float(tnx)
 
 # Data fetching function
@@ -62,10 +60,10 @@ with st.sidebar:
     
     st.divider()
     
-    # 💡 [핵심] 실시간 금리 기반 할인율(WACC) 자동 세팅
+    # 💡 실시간 금리 기반 할인율(WACC) 세팅
     st.markdown("### 🌐 거시경제(매크로) 연동")
     st.info(f"실시간 美 10년물 국채 금리: **{risk_free_rate:.2f}%**")
-    default_wacc = round(risk_free_rate + 5.0, 1) # 국채 금리 + 시장 위험 프리미엄 5%
+    default_wacc = round(risk_free_rate + 5.0, 1) 
     
     discount_rate = st.slider("DCF 할인율 (금리 반영) %", min_value=1.0, max_value=20.0, value=default_wacc, step=0.1, 
                               help="미래의 현금흐름을 현재 가치로 땡겨올 때 깎는 비율입니다. (자동으로 '국채 금리 + 5%' 로 셋팅됩니다.)")
@@ -123,7 +121,6 @@ if ticker_input:
         if hist.empty or len(hist) < 200:
             st.error("데이터가 부족하거나 티커가 올바르지 않습니다.")
         else:
-            # 기술적 지표 계산
             hist['SMA50'] = hist['Close'].rolling(window=50).mean()
             hist['SMA200'] = hist['Close'].rolling(window=200).mean()
             delta = hist['Close'].diff()
@@ -137,7 +134,6 @@ if ticker_input:
             sma200_val = hist['SMA200'].iloc[-1]
             rsi_val = hist['RSI'].iloc[-1]
             
-            # 재무 지표
             eps = info.get('trailingEps', info.get('forwardEps', 0))
             pbr = info.get('priceToBook', 'N/A')
             roe = info.get('returnOnEquity', None)
@@ -149,31 +145,23 @@ if ticker_input:
             shares = info.get('sharesOutstanding', None)
             sector = info.get('sector', '')
             
-            # 💡 [핵심] AI 종목 체질 판독 로직 (가치주 vs 성장주)
+            # 💡 AI 종목 체질 판독 로직
             is_growth = (payout_ratio < 0.15) or ("Technology" in sector) or ("Communication" in sector) or (peg_ratio and peg_ratio > 1.5)
             
-            # 1. 그레이엄 적정 주가 계산
             graham_value = "N/A"
             if eps is not None and eps > 0: 
                 graham_value = eps * (8.5 + 2 * g)
                 
-            # 2. 월가식 간편 DCF 적정 주가 계산
             dcf_value = "N/A"
             if fcf is not None and fcf > 0 and shares is not None:
                 wacc = discount_rate / 100
                 g_dec = g / 100
-                term_g = 0.025 # 영구 성장률 2.5%
-                
-                pv_fcf = 0
-                for i in range(1, 6):
-                    pv_fcf += (fcf * ((1 + g_dec) ** i)) / ((1 + wacc) ** i)
+                term_g = 0.025 
+                pv_fcf = sum([(fcf * ((1 + g_dec) ** i)) / ((1 + wacc) ** i) for i in range(1, 6)])
                 tv = (fcf * ((1 + g_dec) ** 5) * (1 + term_g)) / max((wacc - term_g), 0.001)
                 pv_tv = tv / ((1 + wacc) ** 5)
+                dcf_value = (pv_fcf + pv_tv) / shares
                 
-                total_equity = pv_fcf + pv_tv
-                dcf_value = total_equity / shares
-                
-            # 💡 [핵심] 체질에 따른 메인 가치 자동 스위칭
             if is_growth and dcf_value != "N/A":
                 final_fair_value = dcf_value
                 model_used = "DCF(현금흐름할인) 모델"
@@ -191,12 +179,9 @@ if ticker_input:
             high_1y = hist_1y['High'].max()
             low_1y = hist_1y['Low'].min()
             drawdown = ((current_price - high_1y) / high_1y) * 100
+            mdd = (hist_1y['Close'] / hist_1y['Close'].cummax() - 1.0).min() * 100
             
-            roll_max = hist_1y['Close'].cummax()
-            daily_drawdown = hist_1y['Close'] / roll_max - 1.0
-            mdd = daily_drawdown.min() * 100
-            
-            # 주봉 타점 및 스코어 계산 (이전과 동일 로직)
+            # 주봉 타점 및 스코어 계산
             df_wk = pd.DataFrame()
             if not hist_weekly.empty:
                 df_wk = hist_weekly.copy()
@@ -229,19 +214,15 @@ if ticker_input:
                 df_wk['Converged'] = ((ma_stack.max(axis=1) - ma_stack.min(axis=1)) / ma_stack.min(axis=1)).round(4) <= 0.0700
                 df_wk['Signal_Main'] = (df_wk['Converged'] & (df_wk['Close'] > df_wk['MA20']) & (df_wk['Close'] > df_wk['MA60']) & (df_wk['MA60'] >= df_wk['MA120']) & (df_wk['Close'] > df_wk['ATR_Stop']))
                 df_wk['Signal_Main'] = df_wk['Signal_Main'] & (~df_wk['Signal_Main'].shift(1).fillna(False))
+                df_wk['Signal_Reentry'] = ((df_wk['Close'] > df_wk['MA60']) & ((df_wk['Prev_Close'] <= df_wk['MA10'].shift(1)) & (df_wk['Close'] > df_wk['MA10'])) & (df_wk['Close'] > df_wk['Open']) & (df_wk['MA20'] > df_wk['MA20'].shift(1)) & (df_wk['Close'] > df_wk['ATR_Stop']) & (~df_wk['Signal_Main']))
+                df_wk['Signal_Sell'] = (df_wk['Prev_Close'] >= df_wk['ATR_Stop'].shift(1)) & (df_wk['Close'] < df_wk['ATR_Stop'])
 
-            score = 0
-            checklist = []
-            
+            score = 0; checklist = []
             if margin_of_safety != "N/A":
-                if margin_of_safety > 20:   
-                    score += 2; checklist.append({"status": "pass", "category": "가치", "desc": f"적정주가 대비 안전마진 {margin_of_safety:.1f}%", "score": "+2"})
-                elif margin_of_safety > 0:  
-                    score += 1; checklist.append({"status": "pass", "category": "가치", "desc": f"적정주가 대비 안전마진 {margin_of_safety:.1f}%", "score": "+1"})
-                else:                       
-                    checklist.append({"status": "fail", "category": "가치", "desc": "고평가 상태 (안전마진 부족)", "score": "0"})
-            else:
-                checklist.append({"status": "info", "category": "가치", "desc": "적정 주가 산출 불가 (데이터 부족)", "score": "-"})
+                if margin_of_safety > 20: score += 2; checklist.append({"status": "pass", "category": "가치", "desc": f"적정주가 대비 안전마진 {margin_of_safety:.1f}%", "score": "+2"})
+                elif margin_of_safety > 0: score += 1; checklist.append({"status": "pass", "category": "가치", "desc": f"적정주가 대비 안전마진 {margin_of_safety:.1f}%", "score": "+1"})
+                else: checklist.append({"status": "fail", "category": "가치", "desc": "고평가 상태 (안전마진 부족)", "score": "0"})
+            else: checklist.append({"status": "info", "category": "가치", "desc": "적정 주가 산출 불가", "score": "-"})
                 
             if roe is not None and roe > 0.15: score += 2; checklist.append({"status": "pass", "category": "수익성", "desc": f"ROE 15% 초과 ({roe*100:.1f}%)", "score": "+2"})
             else: checklist.append({"status": "fail", "category": "수익성", "desc": f"ROE 15% 미달", "score": "0"})
@@ -250,14 +231,14 @@ if ticker_input:
             else: checklist.append({"status": "fail", "category": "건전성", "desc": f"부채비율 높음", "score": "0"})
                 
             if pd.notna(sma50_val) and pd.notna(sma200_val):
-                if current_price > sma50_val and sma50_val > sma200_val: score += 3; checklist.append({"status": "pass", "category": "일봉 추세", "desc": "정배열 상승 (주가 > 50일선 > 200일선)", "score": "+3"})
-                elif current_price > sma50_val and sma50_val <= sma200_val: score += 1; checklist.append({"status": "info", "category": "일봉 추세", "desc": "바닥 반등 시작 (주가 > 50일선)", "score": "+1"})
+                if current_price > sma50_val and sma50_val > sma200_val: score += 3; checklist.append({"status": "pass", "category": "일봉 추세", "desc": "정배열 상승", "score": "+3"})
+                elif current_price > sma50_val and sma50_val <= sma200_val: score += 1; checklist.append({"status": "info", "category": "일봉 추세", "desc": "바닥 반등 시작", "score": "+1"})
                 elif current_price <= sma50_val and current_price > sma200_val: score += 1; checklist.append({"status": "info", "category": "일봉 추세", "desc": "장기 상승장 속 조정 (눌림목)", "score": "+1"})
-                else: checklist.append({"status": "fail", "category": "일봉 추세", "desc": "완전 역배열 (단기/장기 하락세)", "score": "0"})
+                else: checklist.append({"status": "fail", "category": "일봉 추세", "desc": "역배열 하락세", "score": "0"})
             else: checklist.append({"status": "fail", "category": "일봉 추세", "desc": "추세 판독 불가", "score": "0"})
                 
-            if pd.notna(rsi_val) and rsi_val < 70: score += 1; checklist.append({"status": "pass", "category": "단기 수급", "desc": f"RSI 70 미만 과열 아님 ({rsi_val:.1f})", "score": "+1"})
-            else: checklist.append({"status": "fail", "category": "단기 수급", "desc": "RSI 단기 과열 상태", "score": "0"})
+            if pd.notna(rsi_val) and rsi_val < 70: score += 1; checklist.append({"status": "pass", "category": "단기 수급", "desc": f"RSI 과열 아님 ({rsi_val:.1f})", "score": "+1"})
+            else: checklist.append({"status": "fail", "category": "단기 수급", "desc": "RSI 단기 과열", "score": "0"})
 
             if score >= 8: judgment = "🌟 강력 매수 (Strong Buy)"; banner_class = "buy-banner"; prog_color = "#1976d2"
             elif score >= 5: judgment = "🟢 분할 매수 / 관망 (Accumulate/Hold)"; banner_class = "hold-banner"; prog_color = "#166534"
@@ -332,7 +313,117 @@ if ticker_input:
                 
             st.markdown("<br>", unsafe_allow_html=True)
             
+            # ==========================================
+            # 💡 [복구 완료] 3대 핵심 차트 렌더링 섹션
+            # ==========================================
+
+            # 1. 최근 10년 주가 vs 내재가치 추이 (DCF/그레이엄 동기화)
+            if not hist_10y.empty and final_fair_value != "N/A":
+                df_10y = hist_10y[['Close']].copy()
+                df_10y.rename(columns={'Close': 'Price'}, inplace=True)
+                
+                latest_date = df_10y.index[-1]
+                years_diff = (latest_date - df_10y.index).days / 365.25
+                
+                # 할인율을 역산하여 과거의 내재가치 궤적을 그림
+                df_10y['Value'] = final_fair_value / ((1 + g/100) ** years_diff)
+                
+                df_10y['Over_Top'] = np.maximum(df_10y['Price'], df_10y['Value'])
+                df_10y['Under_Bottom'] = np.minimum(df_10y['Price'], df_10y['Value'])
+
+                # 원화 스위치 동기화
+                if is_krw:
+                    df_10y['Value'] *= ex_rate
+                    df_10y['Over_Top'] *= ex_rate
+                    df_10y['Under_Bottom'] *= ex_rate
+                    df_10y['Price'] *= ex_rate
+
+                fig_val = go.Figure()
+                fig_val.add_trace(go.Scatter(x=df_10y.index, y=df_10y['Value'], line=dict(width=0), showlegend=False, hoverinfo='skip'))
+                fig_val.add_trace(go.Scatter(x=df_10y.index, y=df_10y['Over_Top'], fill='tonexty', fillcolor='rgba(239, 83, 80, 0.3)', line=dict(width=0), showlegend=False, hoverinfo='skip'))
+                fig_val.add_trace(go.Scatter(x=df_10y.index, y=df_10y['Under_Bottom'], line=dict(width=0), showlegend=False, hoverinfo='skip'))
+                fig_val.add_trace(go.Scatter(x=df_10y.index, y=df_10y['Value'], fill='tonexty', fillcolor='rgba(102, 187, 106, 0.3)', line=dict(width=0), showlegend=False, hoverinfo='skip'))
+                fig_val.add_trace(go.Scatter(x=df_10y.index, y=df_10y['Price'], mode='lines', line=dict(color='#29b6f6', width=2), name='실제 주가 (Price)'))
+                fig_val.add_trace(go.Scatter(x=df_10y.index, y=df_10y['Value'], mode='lines', line=dict(color='#ffa726', width=2, dash='dot'), name=f'추정 내재가치 ({model_used})'))
+
+                fig_val.update_layout(
+                    title=dict(text="📊 10 YR Price to Intrinsic Value Variance Analysis", font=dict(size=20), x=0.5, xanchor='center'),
+                    hovermode="x unified", height=550, margin=dict(l=0, r=0, t=50, b=0),
+                    template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    xaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d'),
+                    yaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d', side='right', tickprefix="₩" if is_krw else "$"),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                
+                with st.container(border=True):
+                    st.plotly_chart(fig_val, use_container_width=True)
+                    st.caption("※ 초록색 구간: 추정 내재가치 대비 저평가(언더슈팅) 구간 | ※ 빨간색 구간: 고평가(오버슈팅) 구간")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+            
+            # 2. 최근 1년 주가 일봉 차트 (SMA 연동)
+            plot_hist_1y = hist_1y.copy()
+            if is_krw:
+                for col in ['Open', 'High', 'Low', 'Close', 'SMA50', 'SMA200']:
+                    plot_hist_1y[col] *= ex_rate
+
+            st.markdown("### 📉 최근 1년 주가 일봉 차트 (SMA 50, SMA 200)")
+            fig = go.Figure()
+            fig.add_trace(go.Candlestick(x=plot_hist_1y.index, open=plot_hist_1y['Open'], high=plot_hist_1y['High'], low=plot_hist_1y['Low'], close=plot_hist_1y['Close'], increasing_line_color='#ef5350', decreasing_line_color='#42a5f5', name=f"{ticker} 캔들"))
+            fig.add_trace(go.Scatter(x=plot_hist_1y.index, y=plot_hist_1y['SMA50'], mode='lines', line=dict(color='#ffd600', width=1.5), name='50일 이동평균'))
+            fig.add_trace(go.Scatter(x=plot_hist_1y.index, y=plot_hist_1y['SMA200'], mode='lines', line=dict(color='#00b0ff', width=1.5), name='200일 이동평균'))
+            
+            fig.update_layout(
+                xaxis_rangeslider_visible=False, height=600, margin=dict(l=0, r=0, t=10, b=0),
+                template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d'),
+                yaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d', side='right', tickprefix="₩" if is_krw else "$"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            with st.container(border=True):
+                st.plotly_chart(fig, use_container_width=True)
+                
+            # 3. 트레이딩뷰 주봉 차트
+            if not df_wk.empty:
+                plot_df_wk = df_wk.copy()
+                if is_krw:
+                    for col in ['Open', 'High', 'Low', 'Close', 'MA10', 'MA20', 'MA60', 'MA120', 'ATR_Stop']:
+                        plot_df_wk[col] *= ex_rate
+
+                st.markdown("<br><br>", unsafe_allow_html=True)
+                st.markdown("### 🔭 트레이딩뷰 주봉 차트")
+                st.markdown("<p style='color:#8b949e; font-size:0.95rem; margin-top:-5px;'> 매수 타점 |  재진입 타점 |  매도 액션 &nbsp;|&nbsp; <b>선풍기: MA10(보라), MA20(노랑), MA60(초록), MA120(갈색), ATR스탑(주황점선)</b></p>", unsafe_allow_html=True)
+                
+                fig_wk = go.Figure()
+                fig_wk.add_trace(go.Candlestick(x=plot_df_wk.index, open=plot_df_wk['Open'], high=plot_df_wk['High'], low=plot_df_wk['Low'], close=plot_df_wk['Close'], increasing_line_color='#ef5350', decreasing_line_color='#42a5f5', name=f"{ticker} 주봉"))
+                fig_wk.add_trace(go.Scatter(x=plot_df_wk.index, y=plot_df_wk['MA10'], mode='lines', line=dict(color='#ab47bc', width=1.5), name='10주선'))
+                fig_wk.add_trace(go.Scatter(x=plot_df_wk.index, y=plot_df_wk['MA20'], mode='lines', line=dict(color='#ffd600', width=1.5), name='20주선'))
+                fig_wk.add_trace(go.Scatter(x=plot_df_wk.index, y=plot_df_wk['MA60'], mode='lines', line=dict(color='#00e676', width=2.5), name='60주선'))
+                fig_wk.add_trace(go.Scatter(x=plot_df_wk.index, y=plot_df_wk['MA120'], mode='lines', line=dict(color='#8d6e63', width=1.5), name='120주선'))
+                fig_wk.add_trace(go.Scatter(x=plot_df_wk.index, y=plot_df_wk['ATR_Stop'], mode='lines', line=dict(color='#ff9800', width=2, dash='dot'), name='ATR 스탑 방어선'))
+                
+                y_main = plot_df_wk[df_wk['Signal_Main']]['Low'] * 0.92
+                y_re = plot_df_wk[df_wk['Signal_Reentry']]['Low'] * 0.92
+                y_sell = plot_df_wk[df_wk['Signal_Sell']]['High'] * 1.08
+                
+                fig_wk.add_trace(go.Scatter(x=plot_df_wk[df_wk['Signal_Main']].index, y=y_main, mode='markers', marker=dict(symbol='triangle-up', color='red', size=20), name=' 매수 타점'))
+                fig_wk.add_trace(go.Scatter(x=plot_df_wk[df_wk['Signal_Reentry']].index, y=y_re, mode='markers', marker=dict(symbol='triangle-up', color='#00e676', size=16), name=' 재진입 타점'))
+                fig_wk.add_trace(go.Scatter(x=plot_df_wk[df_wk['Signal_Sell']].index, y=y_sell, mode='markers', marker=dict(symbol='triangle-down', color='#29b6f6', size=16), name=' 매도 타점'))
+                
+                fig_wk.update_layout(
+                    xaxis_rangeslider_visible=False, height=650, margin=dict(l=0, r=0, t=10, b=0),
+                    template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    xaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d'),
+                    yaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d', side='right', tickprefix="₩" if is_krw else "$"),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                with st.container(border=True):
+                    st.plotly_chart(fig_wk, use_container_width=True)
+
+            # ==========================================
             # --- AI 수석 비서 브리핑 ---
+            # ==========================================
+            st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("### 🤖 수석 비서의 AI 종합 브리핑 (Tier 1)")
             if st.button("✨ 퀀트 데이터 기반 AI 분석 보고서 작성", type="primary", width="stretch"):
                 with st.spinner(f"[{ticker}]의 재무 데이터와 실시간 금리를 바탕으로 AI 브리핑을 작성 중입니다... 🧠"):
