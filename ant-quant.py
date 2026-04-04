@@ -149,10 +149,10 @@ with st.sidebar:
     peer_input = st.text_input("경쟁사 티커 (쉼표로 구분)", value=default_peers, help="AI가 자동으로 찾아낸 경쟁사입니다. 직접 수정하셔도 됩니다.")
 
     # 캐시 강제 무력화 (버전 코드 삽입)
-    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_ipo_unlocked':
+    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_median_fixed':
         st.session_state.g_slider = default_g
         st.session_state.last_ticker = ticker_input
-        st.session_state.app_version = 'v_final_ipo_unlocked'
+        st.session_state.app_version = 'v_final_median_fixed'
         
     st.divider()
     
@@ -171,10 +171,10 @@ with st.sidebar:
 
     g = st.slider("예상 성장률 (g) %", min_value=0.0, max_value=50.0, step=0.5, key="g_slider", help="기업의 향후 5~10년 기대 성장률")
     c1, c2, c3, c4 = st.columns(4)
-    c1.button("10", on_click=set_g, args=(10.0,), width="stretch")
-    c2.button("20", on_click=set_g, args=(20.0,), width="stretch")
-    c3.button("30", on_click=set_g, args=(30.0,), width="stretch")
-    c4.button("5", on_click=set_g, args=(5.0,), width="stretch")
+    c1.button("5", on_click=set_g, args=(5.0,), width="stretch")
+    c2.button("10", on_click=set_g, args=(10.0,), width="stretch")
+    c3.button("20", on_click=set_g, args=(20.0,), width="stretch")
+    c4.button("30", on_click=set_g, args=(30.0,), width="stretch")
     st.button("🔄 SGR 기반 (AI추천)", on_click=set_g, args=(default_g,), width="stretch")
     st.caption(sgr_caption)
 
@@ -202,7 +202,7 @@ if ticker_input:
     try:
         info, hist, hist_10y, hist_weekly = get_stock_market_data(ticker)
         
-        # 💡 [핵심 패치] 신규 상장주(IPO) 입구컷 해제! (200일 -> 20일로 대폭 완화)
+        # 신규 상장주(IPO) 입구컷 해제! (200일 -> 20일로 대폭 완화)
         if hist.empty or len(hist) < 20:
             st.error("데이터가 부족하거나 티커가 올바르지 않습니다. (신규 상장 종목은 최소 20일의 거래 데이터가 필요합니다.)")
         else:
@@ -329,7 +329,7 @@ if ticker_input:
                 elif current_price > sma50_val and sma50_val <= sma200_val: score += 1; checklist.append({"status": "info", "category": "일봉 추세", "desc": "바닥 반등 시작", "score": "+1"})
                 elif current_price <= sma50_val and current_price > sma200_val: score += 1; checklist.append({"status": "info", "category": "일봉 추세", "desc": "장기 상승장 속 조정 (눌림목)", "score": "+1"})
                 else: checklist.append({"status": "fail", "category": "일봉 추세", "desc": "역배열 하락세", "score": "0"})
-            else: checklist.append({"status": "fail", "category": "일봉 추세", "desc": "추세 판독 불가 (신규 상장)", "score": "0"})
+            else: checklist.append({"status": "fail", "category": "일봉 추세", "desc": "추세 판독 불가 (신규 상장 데이터 부족)", "score": "0"})
                 
             if pd.notna(rsi_val) and rsi_val < 70: score += 1; checklist.append({"status": "pass", "category": "단기 수급", "desc": f"RSI 과열 아님 ({rsi_val:.1f})", "score": "+1"})
             else: checklist.append({"status": "fail", "category": "단기 수급", "desc": "RSI 단기 과열", "score": "0"})
@@ -538,7 +538,13 @@ if ticker_input:
                     row_class = "peer-main-row" if is_main else ""
                     table_html += f"<tr class='{row_class}'><td>{row['Ticker']}</td><td>{fmt_price(row['Price'])}</td><td>{fmt_multi(row['Fwd P/E'])}</td><td>{fmt_multi(row['EV/EBITDA'])}</td><td>{fmt_multi(row['P/S'])}</td><td>{fmt_multi(row['EV/Rev'])}</td></tr>"
                 
-                table_html += f"<tr class='peer-median-row'><td>산업 중앙값 (Median)</td><td>-</td><td>{fmt_multi(median_pe_val)}</td><td>{fmt_multi(median_ev_ebitda)}</td><td>{fmt_multi(median_ps)}</td><td>{fmt_multi(median_ev_rev)}</td></tr></table>"
+                # 💡 [핵심 패치] 이전에 증발했던 동종업계 중앙값 계산 4줄 완벽 복구
+                median_pe = peer_df['Fwd P/E'].median()
+                median_ev_ebitda = peer_df['EV/EBITDA'].median()
+                median_ps = peer_df['P/S'].median()
+                median_ev_rev = peer_df['EV/Rev'].median()
+                
+                table_html += f"<tr class='peer-median-row'><td>산업 중앙값 (Median)</td><td>-</td><td>{fmt_multi(median_pe)}</td><td>{fmt_multi(median_ev_ebitda)}</td><td>{fmt_multi(median_ps)}</td><td>{fmt_multi(median_ev_rev)}</td></tr></table>"
                 
                 with st.container(border=True): st.markdown(table_html, unsafe_allow_html=True)
             else:
@@ -678,7 +684,7 @@ if ticker_input:
                     try:
                         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                         model = genai.GenerativeModel('gemini-2.5-flash', generation_config={"temperature": 0.7, "max_output_tokens": 8000})
-                        ai_median_pe = f"{median_pe_val:.2f}배" if median_pe_val is not None else "데이터 없음"
+                        ai_median_pe = f"{median_pe:.2f}배" if not peer_df.empty else "데이터 없음"
                         short_text = f"{short_pct*100:.2f}%" if short_pct else "데이터 없음"
                         
                         prompt = f"""
