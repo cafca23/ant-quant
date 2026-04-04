@@ -61,6 +61,16 @@ with col_header1:
     st.markdown("<h1 style='margin-bottom: 0; font-size: 2.0rem;'>📈 앤트리치 퀀트 터미널</h1>", unsafe_allow_html=True)
     st.markdown("<p style='color: #8b949e; font-size: 1.05rem; margin-top: 5px;'>월스트리트 결합 퀀트 평가 시스템 (AI 엔진 탑재)</p>", unsafe_allow_html=True)
 
+# 💡 [핵심] 실시간 원/달러 환율 수집기
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_exchange_rate():
+    try:
+        usdkrw = yf.Ticker("USDKRW=X")
+        rate = usdkrw.history(period="1d")['Close'].iloc[-1]
+        return float(rate)
+    except:
+        return 1350.0  # 통신 실패 시 기본 환율
+
 # Data fetching function MUST be defined before sidebar calls it
 @st.cache_data(ttl=3600, show_spinner="티커 재무 데이터를 분석하고 있습니다...")
 def get_stock_market_data(ticker):
@@ -86,6 +96,13 @@ def get_stock_market_data(ticker):
 with st.sidebar:
     st.markdown("### ⚙️ 분석 설정")
     ticker_input = st.text_input("종목 티커 입력 (예: AAPL, PLTR, QQQ)", value="AAPL")
+    
+    # 💡 [핵심] 달러/원화 토글 버튼 (가장 최신 트렌디한 라디오 버튼형)
+    currency_opt = st.radio("💱 표시 통화", ["$ 달러", "₩ 원화"], horizontal=True)
+    is_krw = currency_opt == "₩ 원화"
+    ex_rate = get_exchange_rate() if is_krw else 1.0
+    
+    st.divider()
     
     default_g = 15.0
     sgr_caption = "💡 AI 추천 성장률: 정보 없음 (기본값 15.0% 적용)"
@@ -119,7 +136,6 @@ with st.sidebar:
                   help="벤저민 그레이엄 공식에 적용할 향후 7~10년 장기 기대 성장률")
                   
     c1, c2, c3, c4 = st.columns(4)
-    # 💡 최신 문법 패치: use_container_width -> width="stretch" (지원 버전 호환성을 위해 유지하되, 내부 최적화)
     c1.button("10", on_click=set_g, args=(10.0,), use_container_width=True)
     c2.button("20", on_click=set_g, args=(20.0,), use_container_width=True)
     c3.button("30", on_click=set_g, args=(30.0,), use_container_width=True)
@@ -141,6 +157,12 @@ with st.sidebar:
         - 타이밍: SMA 50 > SMA 200 정배열 (+1)
         - 리스크: RSI(14) < 70 과열방지 (+1)
         """)
+
+# 💡 [핵심] 환율 포맷팅 도우미 함수
+def fmt_price(val):
+    if val == "N/A" or val is None: return "N/A"
+    if is_krw: return f"₩{val * ex_rate:,.0f}"
+    return f"${val:,.2f}"
 
 if ticker_input:
     ticker = ticker_input.upper()
@@ -363,16 +385,16 @@ if ticker_input:
             st.markdown("<br>", unsafe_allow_html=True)
             
             # ==========================================
-            # 💡 [툴팁 고도화] 펀더멘털 및 기술 지표 설명 추가
+            # 💡 [툴팁 고도화 & 원화 변환 적용] 펀더멘털 및 기술 지표
             # ==========================================
             st.markdown("### 📊 주요 펀더멘털 및 기술 지표")
             with st.container(border=True):
                 c1, c2, c3, c4 = st.columns(4)
-                with c1: st.metric(label="현재 주가", value=f"${current_price:,.2f}", delta=f"{drawdown:.2f}% (최고가대비)")
-                with c2: st.metric(label="적정 주가", value=f"${value_graham:,.2f}" if value_graham != "N/A" else "N/A", 
+                with c1: st.metric(label="현재 주가", value=fmt_price(current_price), delta=f"{drawdown:.2f}% (최고가대비)")
+                with c2: st.metric(label="적정 주가", value=fmt_price(value_graham) if value_graham != "N/A" else "N/A", 
                                    delta=f"{margin_of_safety:.2f}% (안전마진)" if margin_of_safety != "N/A" else None)
                 with c3: st.metric(label="1년 MDD (최대 낙폭)", value=f"{mdd:.2f}%", delta="Max Drawdown", delta_color="inverse")
-                with c4: st.metric(label="EPS (주당순이익)", value=f"${eps:,.2f}" if eps else "N/A", 
+                with c4: st.metric(label="EPS (주당순이익)", value=fmt_price(eps) if eps else "N/A", 
                                    help="1주당 회사가 벌어들인 순이익을 의미해요. 숫자가 클수록 회사의 기업 가치가 크고, 배당 줄 수 있는 여유가 늘어났다고 볼 수 있어요.")
                     
             with st.container(border=True):
@@ -381,8 +403,8 @@ if ticker_input:
                                    help="주가가 1주당 장부상 순자산가치의 몇 배로 거래되는지 나타냅니다. 1 미만이면 회사를 다 팔아도 남는 돈보다 주가가 싸다는 뜻(저평가)입니다.")
                 with c6: st.metric(label="ROE", value=f"{roe*100:.2f}%" if roe is not None else "N/A", 
                                    help="회사가 주주들의 돈(자본)을 굴려서 1년간 얼마를 벌었는지 보여주는 핵심 수익성 지표입니다. (통상 15% 이상이면 우량 기업으로 평가)")
-                with c7: st.metric(label="52주 최고가", value=f"${high_1y:,.2f}")
-                with c8: st.metric(label="52주 최저가", value=f"${low_1y:,.2f}")
+                with c7: st.metric(label="52주 최고가", value=fmt_price(high_1y))
+                with c8: st.metric(label="52주 최저가", value=fmt_price(low_1y))
                     
             st.markdown("<br>", unsafe_allow_html=True)
             
@@ -394,10 +416,18 @@ if ticker_input:
             else:
                 peg_val = "N/A"; peg_delta = None; peg_color = "off"
                 
+            # FCF 원화 변환 처리
             if fcf is not None:
-                if fcf >= 1e12: fcf_val = f"${fcf/1e12:.2f}T (조)"
-                elif fcf >= 1e9: fcf_val = f"${fcf/1e9:.2f}B (십억)"
-                else: fcf_val = f"${fcf/1e6:.2f}M (백만)"
+                fcf_conv = fcf * ex_rate
+                if is_krw:
+                    if fcf_conv >= 1e12: fcf_val = f"₩{fcf_conv/1e12:.2f}조"
+                    elif fcf_conv >= 1e8: fcf_val = f"₩{fcf_conv/1e8:.2f}억"
+                    else: fcf_val = f"₩{fcf_conv:,.0f}"
+                else:
+                    if fcf >= 1e12: fcf_val = f"${fcf/1e12:.2f}T (조)"
+                    elif fcf >= 1e9: fcf_val = f"${fcf/1e9:.2f}B (십억)"
+                    else: fcf_val = f"${fcf/1e6:.2f}M (백만)"
+                    
                 fcf_delta = "현금창출 긍정적" if fcf > 0 else "현금유출 우려"
                 fcf_color = "normal" if fcf > 0 else "inverse"
             else:
@@ -442,6 +472,13 @@ if ticker_input:
                 df_10y['Over_Top'] = np.maximum(df_10y['Price'], df_10y['Value'])
                 df_10y['Under_Bottom'] = np.minimum(df_10y['Price'], df_10y['Value'])
 
+                # 💡 [핵심] 차트 Y축 환율 동기화
+                if is_krw:
+                    df_10y['Value'] *= ex_rate
+                    df_10y['Over_Top'] *= ex_rate
+                    df_10y['Under_Bottom'] *= ex_rate
+                    df_10y['Price'] *= ex_rate
+
                 fig_val = go.Figure()
                 fig_val.add_trace(go.Scatter(x=df_10y.index, y=df_10y['Value'], line=dict(width=0), showlegend=False, hoverinfo='skip'))
                 fig_val.add_trace(go.Scatter(x=df_10y.index, y=df_10y['Over_Top'], fill='tonexty', fillcolor='rgba(239, 83, 80, 0.3)', line=dict(width=0), showlegend=False, hoverinfo='skip'))
@@ -459,7 +496,7 @@ if ticker_input:
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)",
                     xaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d'),
-                    yaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d', side='right'),
+                    yaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d', side='right', tickprefix="₩" if is_krw else "$"),
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                 )
                 
@@ -469,16 +506,22 @@ if ticker_input:
 
                 st.markdown("<br>", unsafe_allow_html=True)
             
+            # 💡 [핵심] 일봉 차트 Y축 환율 동기화
+            plot_hist_1y = hist_1y.copy()
+            if is_krw:
+                for col in ['Open', 'High', 'Low', 'Close', 'SMA50', 'SMA200']:
+                    plot_hist_1y[col] *= ex_rate
+
             st.markdown("### 📉 최근 1년 주가 일봉 차트 (SMA 50, SMA 200)")
             fig = go.Figure()
             
-            fig.add_trace(go.Candlestick(x=hist_1y.index,
-                            open=hist_1y['Open'], high=hist_1y['High'], low=hist_1y['Low'], close=hist_1y['Close'],
+            fig.add_trace(go.Candlestick(x=plot_hist_1y.index,
+                            open=plot_hist_1y['Open'], high=plot_hist_1y['High'], low=plot_hist_1y['Low'], close=plot_hist_1y['Close'],
                             increasing_line_color='#ef5350', decreasing_line_color='#42a5f5',
                             name=f"{ticker} 캔들"))
                             
-            fig.add_trace(go.Scatter(x=hist_1y.index, y=hist_1y['SMA50'], mode='lines', line=dict(color='#ffd600', width=1.5), name='50일 이동평균'))
-            fig.add_trace(go.Scatter(x=hist_1y.index, y=hist_1y['SMA200'], mode='lines', line=dict(color='#00b0ff', width=1.5), name='200일 이동평균'))
+            fig.add_trace(go.Scatter(x=plot_hist_1y.index, y=plot_hist_1y['SMA50'], mode='lines', line=dict(color='#ffd600', width=1.5), name='50일 이동평균'))
+            fig.add_trace(go.Scatter(x=plot_hist_1y.index, y=plot_hist_1y['SMA200'], mode='lines', line=dict(color='#00b0ff', width=1.5), name='200일 이동평균'))
             
             fig.update_layout(
                 xaxis_rangeslider_visible=False,
@@ -488,36 +531,42 @@ if ticker_input:
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 xaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d'),
-                yaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d', side='right'),
+                yaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d', side='right', tickprefix="₩" if is_krw else "$"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
             with st.container(border=True):
                 st.plotly_chart(fig, use_container_width=True)
                 
             if not df_wk.empty:
+                # 💡 [핵심] 주봉 차트 Y축 환율 동기화
+                plot_df_wk = df_wk.copy()
+                if is_krw:
+                    for col in ['Open', 'High', 'Low', 'Close', 'MA10', 'MA20', 'MA60', 'MA120', 'ATR_Stop']:
+                        plot_df_wk[col] *= ex_rate
+
                 st.markdown("<br><br>", unsafe_allow_html=True)
                 st.markdown("### 🔭 트레이딩뷰 주봉 차트")
                 st.markdown("<p style='color:#8b949e; font-size:0.95rem; margin-top:-5px;'> 매수 타점 |  재진입 타점 |  매도 액션 &nbsp;|&nbsp; <b>선풍기: MA10(보라), MA20(노랑), MA60(초록), MA120(갈색), ATR스탑(주황점선)</b></p>", unsafe_allow_html=True)
                 
                 fig_wk = go.Figure()
                 
-                fig_wk.add_trace(go.Candlestick(x=df_wk.index,
-                    open=df_wk['Open'], high=df_wk['High'], low=df_wk['Low'], close=df_wk['Close'],
+                fig_wk.add_trace(go.Candlestick(x=plot_df_wk.index,
+                    open=plot_df_wk['Open'], high=plot_df_wk['High'], low=plot_df_wk['Low'], close=plot_df_wk['Close'],
                     increasing_line_color='#ef5350', decreasing_line_color='#42a5f5', name=f"{ticker} 주봉"))
                     
-                fig_wk.add_trace(go.Scatter(x=df_wk.index, y=df_wk['MA10'], mode='lines', line=dict(color='#ab47bc', width=1.5), name='10주선'))
-                fig_wk.add_trace(go.Scatter(x=df_wk.index, y=df_wk['MA20'], mode='lines', line=dict(color='#ffd600', width=1.5), name='20주선'))
-                fig_wk.add_trace(go.Scatter(x=df_wk.index, y=df_wk['MA60'], mode='lines', line=dict(color='#00e676', width=2.5), name='60주선'))
-                fig_wk.add_trace(go.Scatter(x=df_wk.index, y=df_wk['MA120'], mode='lines', line=dict(color='#8d6e63', width=1.5), name='120주선'))
-                fig_wk.add_trace(go.Scatter(x=df_wk.index, y=df_wk['ATR_Stop'], mode='lines', line=dict(color='#ff9800', width=2, dash='dot'), name='ATR 스탑 방어선'))
+                fig_wk.add_trace(go.Scatter(x=plot_df_wk.index, y=plot_df_wk['MA10'], mode='lines', line=dict(color='#ab47bc', width=1.5), name='10주선'))
+                fig_wk.add_trace(go.Scatter(x=plot_df_wk.index, y=plot_df_wk['MA20'], mode='lines', line=dict(color='#ffd600', width=1.5), name='20주선'))
+                fig_wk.add_trace(go.Scatter(x=plot_df_wk.index, y=plot_df_wk['MA60'], mode='lines', line=dict(color='#00e676', width=2.5), name='60주선'))
+                fig_wk.add_trace(go.Scatter(x=plot_df_wk.index, y=plot_df_wk['MA120'], mode='lines', line=dict(color='#8d6e63', width=1.5), name='120주선'))
+                fig_wk.add_trace(go.Scatter(x=plot_df_wk.index, y=plot_df_wk['ATR_Stop'], mode='lines', line=dict(color='#ff9800', width=2, dash='dot'), name='ATR 스탑 방어선'))
                 
-                y_main = df_wk[df_wk['Signal_Main']]['Low'] * 0.92
-                y_re = df_wk[df_wk['Signal_Reentry']]['Low'] * 0.92
-                y_sell = df_wk[df_wk['Signal_Sell']]['High'] * 1.08
+                y_main = plot_df_wk[df_wk['Signal_Main']]['Low'] * 0.92
+                y_re = plot_df_wk[df_wk['Signal_Reentry']]['Low'] * 0.92
+                y_sell = plot_df_wk[df_wk['Signal_Sell']]['High'] * 1.08
                 
-                fig_wk.add_trace(go.Scatter(x=df_wk[df_wk['Signal_Main']].index, y=y_main, mode='markers', marker=dict(symbol='triangle-up', color='red', size=20), name=' 매수 타점'))
-                fig_wk.add_trace(go.Scatter(x=df_wk[df_wk['Signal_Reentry']].index, y=y_re, mode='markers', marker=dict(symbol='triangle-up', color='#00e676', size=16), name=' 재진입 타점'))
-                fig_wk.add_trace(go.Scatter(x=df_wk[df_wk['Signal_Sell']].index, y=y_sell, mode='markers', marker=dict(symbol='triangle-down', color='#29b6f6', size=16), name=' 매도 타점'))
+                fig_wk.add_trace(go.Scatter(x=plot_df_wk[df_wk['Signal_Main']].index, y=y_main, mode='markers', marker=dict(symbol='triangle-up', color='red', size=20), name=' 매수 타점'))
+                fig_wk.add_trace(go.Scatter(x=plot_df_wk[df_wk['Signal_Reentry']].index, y=y_re, mode='markers', marker=dict(symbol='triangle-up', color='#00e676', size=16), name=' 재진입 타점'))
+                fig_wk.add_trace(go.Scatter(x=plot_df_wk[df_wk['Signal_Sell']].index, y=y_sell, mode='markers', marker=dict(symbol='triangle-down', color='#29b6f6', size=16), name=' 매도 타점'))
                 
                 fig_wk.update_layout(
                     xaxis_rangeslider_visible=False,
@@ -527,7 +576,7 @@ if ticker_input:
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)",
                     xaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d'),
-                    yaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d', side='right'),
+                    yaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d', side='right', tickprefix="₩" if is_krw else "$"),
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                 )
                 
