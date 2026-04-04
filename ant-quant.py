@@ -142,11 +142,10 @@ with st.sidebar:
 
     peer_input = st.text_input("경쟁사 티커 (쉼표로 구분)", value=default_peers, help="AI가 자동으로 찾아낸 경쟁사입니다. 직접 수정하셔도 됩니다.")
 
-    # 캐시 강제 무력화 (버전 코드 삽입)
-    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_tooltips_restored':
+    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_reports_added':
         st.session_state.g_slider = default_g
         st.session_state.last_ticker = ticker_input
-        st.session_state.app_version = 'v_final_tooltips_restored'
+        st.session_state.app_version = 'v_final_reports_added'
         
     st.divider()
     
@@ -202,8 +201,6 @@ if ticker_input:
             loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
             rs = gain / loss
             hist['RSI'] = 100 - (100 / (1 + rs))
-            
-            # OBV 계산
             hist['OBV'] = (np.sign(hist['Close'].diff()) * hist['Volume']).fillna(0).cumsum()
 
             current_price = info.get('currentPrice', hist['Close'].iloc[-1])
@@ -221,18 +218,15 @@ if ticker_input:
             shares = info.get('sharesOutstanding', None)
             sector = str(info.get('sector', '')).lower()
             
-            # 멀티플 지표
             ev_ebitda = info.get('enterpriseToEbitda', None)
             ps_ratio = info.get('priceToSalesTrailing12Months', None)
             ev_revenue = info.get('enterpriseToRevenue', None)
             forward_pe = info.get('forwardPE', None)
             
-            # 스마트머니 지표
             short_pct = info.get('shortPercentOfFloat', None)
             insider_pct = info.get('heldPercentInsiders', None)
             earnings_growth = info.get('earningsGrowth', None)
             
-            # 메인 가치주 스위치
             is_main_value_stock = False
             value_sectors = ["consumer defensive", "utilities", "energy", "real estate", "financial services", "basic materials", "industrials"]
             if any(v_sec in sector for v_sec in value_sectors) or payout_ratio >= 0.40:
@@ -363,7 +357,7 @@ if ticker_input:
             st.markdown(badge_html, unsafe_allow_html=True)
             
             # ==========================================
-            # 💡 [툴팁 복구] 펀더멘털 및 기술 지표
+            # 1. 주요 펀더멘털 및 기술 지표
             # ==========================================
             st.markdown("### 📊 주요 펀더멘털 및 기술 지표")
             with st.container(border=True):
@@ -384,11 +378,34 @@ if ticker_input:
                                    help="회사가 주주의 돈(자본)을 굴려서 1년간 얼마를 벌었는지 보여주는 핵심 수익성 지표입니다. (통상 15% 이상이면 우량 기업으로 평가)")
                 with c7: st.metric(label="52주 최고가", value=fmt_price(high_1y))
                 with c8: st.metric(label="52주 최저가", value=fmt_price(low_1y))
+            
+            # 💡 [신규] 펀더멘털 자동 분석 리포트
+            if final_fair_value != "N/A":
+                is_undervalued = margin_of_safety > 0
+                fund_color = "#3fb950" if is_undervalued else "#f85149"
+                fund_status = "🌟 [저평가] 적정 가치 대비 할인 거래 중" if is_undervalued else "🚨 [고평가] 적정 가치 대비 프리미엄 거래 중"
+                
+                fund_desc = f"현재 주가({fmt_price(current_price)})는 {model_used}로 산출된 적정 주가({fmt_price(final_fair_value)}) 대비 **{'싸게' if is_undervalued else '비싸게'}** 거래되고 있습니다. "
+                if roe is not None:
+                    if roe > 0.15: fund_desc += "ROE가 15%를 초과하여 자본 배분 수익성이 매우 우수하며, "
+                    else: fund_desc += "ROE가 15% 미만으로 자본 수익성은 평범하거나 다소 아쉬운 수준입니다. "
+                fund_desc += f"최근 1년 동안 최고가 대비 최대 {mdd:.1f}% 하락한 변동성이 있었습니다."
+                
+                st.markdown(f"""
+                <div style="padding: 15px; border-radius: 5px; margin-top: 10px; margin-bottom: 20px; border-left: 4px solid {fund_color}; background-color: rgba({'63, 185, 80' if is_undervalued else '248, 81, 73'}, 0.1);">
+                    <h4 style="margin-top: 0; color: {fund_color};">{fund_status}</h4>
+                    <p style="margin-bottom: 0; font-size: 0.95rem; color: #c9d1d9;">{fund_desc}</p>
+                </div>
+                """, unsafe_allow_html=True)
                     
             st.markdown("<br>", unsafe_allow_html=True)
             
+            # 데이터를 먼저 로드 (스마트머니 리포트에서 활용하기 위함)
+            peer_df = get_peers_data(ticker, peer_input)
+            median_pe_val = peer_df['Fwd P/E'].median() if not peer_df.empty else None
+
             # ==========================================
-            # 💡 [툴팁 복구] 전문가 핵심 지표, 상대가치, 스마트머니
+            # 2. 전문가 핵심 지표, 상대가치, 스마트머니
             # ==========================================
             st.markdown("### 👔 Professional Insights (전문가 핵심 지표)")
             with st.container(border=True):
@@ -448,12 +465,44 @@ if ticker_input:
                 with sc3: st.metric(label="Earnings Growth (실적/추정치 성장)", value=fmt_pct(earnings_growth), delta=earn_eval, delta_color=earn_color, help="최근 월가 애널리스트들의 실적(순이익) 추정치 증가율입니다. 양수(+)면 기관들의 목표가가 올라가고 있다는 뜻입니다.")
                 with sc4: st.metric(label="OBV Trend (매집/분산 수급)", value="하단 차트 확인 📉", help="아래 일봉 차트 밑의 OBV 보조 차트를 통해 세력이 매집 중인지, 물량을 떠넘기고 있는지 시각적으로 확인하십시오.")
 
+            # 💡 [신규] 전문가 상대가치 및 스마트머니 자동 분석 리포트
+            smart_color = "#29b6f6" # Blue
+            smart_status = "📊 [종합] 상대가치 및 스마트머니 수급 브리핑"
+            smart_desc = ""
+            
+            if forward_pe and median_pe_val is not None and not np.isnan(median_pe_val):
+                if forward_pe > median_pe_val:
+                    smart_desc += f"동종 업계(경쟁사) 중앙값 PER({median_pe_val:.1f}배) 대비 현재 선행 PER({forward_pe:.1f}배)이 더 높아 **상대적으로 고평가(프리미엄)**를 받고 있습니다. "
+                else:
+                    smart_desc += f"동종 업계 중앙값 PER({median_pe_val:.1f}배) 대비 선행 PER({forward_pe:.1f}배)이 낮아 **상대적 저평가(할인)** 매력이 있습니다. "
+                    
+            if short_pct is not None:
+                if is_main_value_stock and short_pct >= 0.03:
+                    smart_desc += "단, 가치주임에도 공매도 잔고가 3% 이상으로 세력의 하방 압력이 존재하며, "
+                elif not is_main_value_stock and short_pct >= 0.10:
+                    smart_desc += "성장주 특성을 고려해도 공매도 비율이 10%를 초과하여 주의가 필요합니다. "
+                else:
+                    smart_desc += "공매도 비율은 양호한 수준이며, "
+                    
+            if earnings_growth is not None:
+                if earnings_growth > 0:
+                    smart_desc += f"최근 실적(추정치)이 전년 대비 **{earnings_growth*100:.1f}% 상향**되어 월가의 긍정적인 전망이 뒷받침되고 있습니다."
+                else:
+                    smart_desc += f"최근 실적(추정치)이 전년 대비 **역성장({earnings_growth*100:.1f}%)** 세팅되어 향후 펀더멘털 악화 우려가 있습니다."
+
+            if smart_desc:
+                st.markdown(f"""
+                <div style="padding: 15px; border-radius: 5px; margin-top: 10px; margin-bottom: 20px; border-left: 4px solid {smart_color}; background-color: rgba(41, 182, 246, 0.1);">
+                    <h4 style="margin-top: 0; color: {smart_color};">{smart_status}</h4>
+                    <p style="margin-bottom: 0; font-size: 0.95rem; color: #c9d1d9;">{smart_desc}</p>
+                </div>
+                """, unsafe_allow_html=True)
+
             with st.expander("💡 알파 스프레드 4대 핵심 지표 완벽 해독 가이드", expanded=False):
                 ev_e_text = f"{ev_ebitda:.2f}배" if ev_ebitda else "N/A"
                 ps_text = f"{ps_ratio:.2f}배" if ps_ratio else "N/A"
                 ev_r_text = f"{ev_revenue:.2f}배" if ev_revenue else "N/A"
                 fwd_pe_text = f"{forward_pe:.2f}배" if forward_pe else "N/A"
-                
                 ev_e_years = f"약 {int(ev_ebitda)}년" if ev_ebitda else "알 수 없는 기간"
                 ev_e_eval = "꽤 비싼(고평가)" if ev_ebitda and ev_ebitda > 10 else "저렴한(저평가)"
                 pe_eval = "시장 평균 대비 비싸게" if forward_pe and forward_pe > 15 else "시장 평균 대비 저렴하게"
@@ -478,20 +527,18 @@ if ticker_input:
             st.markdown("<br>", unsafe_allow_html=True)
             
             st.markdown("### ⚖️ 동종 업계 멀티플 비교 (Peer Valuation)")
-            peer_df = get_peers_data(ticker, peer_input)
             
             if not peer_df.empty:
-                median_pe = peer_df['Fwd P/E'].median()
-                median_ev_ebitda = peer_df['EV/EBITDA'].median()
-                median_ps = peer_df['P/S'].median()
-                median_ev_rev = peer_df['EV/Rev'].median()
-                
                 table_html = "<table class='peer-table'><tr><th>Ticker</th><th>Price (현재 주가)</th><th>Forward P/E (선행 PER)</th><th>EV/EBITDA (현금창출비율)</th><th>P/S Ratio (주가/매출액)</th><th>EV/Revenue (기업가치/매출)</th></tr>"
                 for _, row in peer_df.iterrows():
                     is_main = row['Ticker'] == ticker
                     row_class = "peer-main-row" if is_main else ""
                     table_html += f"<tr class='{row_class}'><td>{row['Ticker']}</td><td>{fmt_price(row['Price'])}</td><td>{fmt_multi(row['Fwd P/E'])}</td><td>{fmt_multi(row['EV/EBITDA'])}</td><td>{fmt_multi(row['P/S'])}</td><td>{fmt_multi(row['EV/Rev'])}</td></tr>"
                 
+                median_pe = peer_df['Fwd P/E'].median()
+                median_ev_ebitda = peer_df['EV/EBITDA'].median()
+                median_ps = peer_df['P/S'].median()
+                median_ev_rev = peer_df['EV/Rev'].median()
                 table_html += f"<tr class='peer-median-row'><td>산업 중앙값 (Median)</td><td>-</td><td>{fmt_multi(median_pe)}</td><td>{fmt_multi(median_ev_ebitda)}</td><td>{fmt_multi(median_ps)}</td><td>{fmt_multi(median_ev_rev)}</td></tr></table>"
                 
                 with st.container(border=True): st.markdown(table_html, unsafe_allow_html=True)
@@ -630,7 +677,7 @@ if ticker_input:
                     try:
                         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                         model = genai.GenerativeModel('gemini-2.5-flash', generation_config={"temperature": 0.7, "max_output_tokens": 8000})
-                        ai_median_pe = f"{median_pe:.2f}배" if not peer_df.empty else "데이터 없음"
+                        ai_median_pe = f"{median_pe_val:.2f}배" if median_pe_val is not None else "데이터 없음"
                         short_text = f"{short_pct*100:.2f}%" if short_pct else "데이터 없음"
                         
                         prompt = f"""
