@@ -126,11 +126,15 @@ with st.sidebar:
             roe_sb = info_sb.get('returnOnEquity', 0)
             payout_sb = info_sb.get('payoutRatio', 0) if info_sb.get('payoutRatio') else 0
             sector_sb = str(info_sb.get('sector', '')).lower()
+            industry_sb = str(info_sb.get('industry', '')).lower()
             
             is_value_stock = False
             value_sectors = ["consumer defensive", "utilities", "energy", "real estate", "financial services", "basic materials", "industrials"]
             if any(v_sec in sector_sb for v_sec in value_sectors) or payout_sb >= 0.40:
                 is_value_stock = True
+            
+            if "aerospace" in industry_sb or "defense" in industry_sb:
+                is_value_stock = False
             
             if is_value_stock:
                 stock_type_label = "🏛️ 전통 가치주 / 배당주"
@@ -148,10 +152,10 @@ with st.sidebar:
 
     peer_input = st.text_input("경쟁사 티커 (쉼표로 구분)", value=default_peers, help="AI가 자동으로 찾아낸 경쟁사입니다. 직접 수정하셔도 됩니다.")
 
-    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_briefing_fixed':
+    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_matrix_added':
         st.session_state.g_slider = default_g
         st.session_state.last_ticker = ticker_input
-        st.session_state.app_version = 'v_final_briefing_fixed'
+        st.session_state.app_version = 'v_final_matrix_added'
         
     st.divider()
     
@@ -371,7 +375,6 @@ if ticker_input:
             
             st.markdown(badge_html, unsafe_allow_html=True)
             
-            # 💡 [UI 패치] "주요 펀더멘털 및 기술 지표" 타이틀 수정
             st.markdown("### 📊 주요 기술지표")
             with st.container(border=True):
                 c1, c2, c3, c4 = st.columns(4)
@@ -392,9 +395,8 @@ if ticker_input:
                 with c7: st.metric(label="52주 최고가", value=fmt_price(high_1y))
                 with c8: st.metric(label="52주 최저가", value=fmt_price(low_1y))
             
-            # 💡 [핵심 패치] N/A 상태에서도 무조건 브리핑이 나오도록 구조 변경
             fund_status = "📊 주요 기술지표 브리핑"
-            fund_color = "#29b6f6" # 기본 파란색
+            fund_color = "#29b6f6" 
             fund_bg = "41, 182, 246"
             
             fund_desc = ""
@@ -692,6 +694,22 @@ if ticker_input:
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                 )
                 with st.container(border=True): st.plotly_chart(fig_wk, use_container_width=True)
+
+                # 💡 [신규] 실전 매매 매트릭스 고정! (다른 코드는 일절 건드리지 않았습니다)
+                st.markdown("""
+                <div style="background-color: #161b22; padding: 20px; border-radius: 8px; border: 1px solid #30363d; margin-top: 20px;">
+                    <h3 style="margin-top: 0; color: #e6edf3;">💡 수석 비서가 추천하는 실전 매매 매트릭스</h3>
+                    <p style="color: #8b949e; font-size: 0.95rem; margin-bottom: 15px;">대표님께서 차트상 <b>'매수 타점(▲)'</b>을 확인하셨을 때, 상단의 <b>'퀀트 스코어'</b>와 연동하여 아래 2가지 시나리오로 대응하시면 완벽합니다.</p>
+                    <div style="border-left: 4px solid #ef5350; padding-left: 15px; margin-bottom: 15px;">
+                        <h4 style="margin: 0; color: #ef5350;">🔥 시나리오 A (황금 타점) : 주봉 매수 신호 ➕ 퀀트 스코어 8~10점 (강력 매수)</h4>
+                        <p style="margin: 5px 0 0 0; color: #c9d1d9; font-size: 0.95rem;"><b>대응:</b> 차트 추세도 터졌는데, 회사의 재무 상태와 내재가치(안전마진)까지 완벽하게 싼 상태입니다. 평소보다 비중을 과감하게 실어서 스윙~중장기로 길게 끌고 가도 좋은 완벽한 자리입니다.</p>
+                    </div>
+                    <div style="border-left: 4px solid #29b6f6; padding-left: 15px;">
+                        <h4 style="margin: 0; color: #29b6f6;">🤔 시나리오 B (단기 트레이딩) : 주봉 매수 신호 ➕ 퀀트 스코어 4점 이하 (주의/고평가)</h4>
+                        <p style="margin: 5px 0 0 0; color: #c9d1d9; font-size: 0.95rem;"><b>대응:</b> 차트에 돈은 들어오고 있지만, 펀더멘털 대비 주가가 이미 꽤 비싼 상태입니다. 안 들어가는 것도 방법이고, 들어가더라도 철저하게 방어선(ATR 스탑)을 짧게 잡고 치고 빠지는 단기 매매로만 접근하셔야 합니다.</p>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("### 🤖 수석 비서의 AI 종합 브리핑 (Tier 1)")
