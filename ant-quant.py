@@ -124,19 +124,22 @@ with st.sidebar:
                 if ai_peers: 
                     default_peers = ai_peers
             
-            # 💡 [핵심] 가치주 성장률 뻥튀기 방어 로직
+            # 💡 [핵심 완벽 패치] 가치주 성장률 뻥튀기 원천 차단
             roe_sb = info_sb.get('returnOnEquity', 0)
-            payout_sb = info_sb.get('payoutRatio', 0)
+            payout_sb = info_sb.get('payoutRatio', 0) if info_sb.get('payoutRatio') else 0
             sector_sb = info_sb.get('sector', '')
-            peg_sb = info_sb.get('pegRatio', 0)
             
-            is_growth_sb = (payout_sb < 0.15) or ("Technology" in sector_sb) or ("Communication" in sector_sb) or (peg_sb and peg_sb > 1.5)
+            is_value_stock = False
+            # 1. 굴뚝/전통 산업이거나 2. 배당을 40% 이상 준다면 무조건 가치주로 컷오프
+            value_sectors = ["Consumer Defensive", "Utilities", "Energy", "Real Estate", "Financial Services", "Basic Materials", "Industrials"]
+            if any(v_sec in sector_sb for v_sec in value_sectors) or payout_sb >= 0.40:
+                is_value_stock = True
             
             if roe_sb is not None and roe_sb > 0:
-                if not is_growth_sb:
-                    # 가치/배당주는 ROE의 함정에 속지 않고 5.0%로 보수적 강제 세팅
+                if is_value_stock:
+                    # 가치/배당주는 ROE 함정에 속지 않고 5.0%로 보수적 강제 세팅
                     default_g = 5.0
-                    sgr_caption = f"💡 전통 가치주 보수적 세팅: {default_g}% (SGR 제한)"
+                    sgr_caption = f"💡 전통 가치주 보수적 세팅: {default_g}% (강제 고정)"
                 else:
                     sgr = max(5.0, min(roe_sb * (1 - payout_sb) * 100, 50.0))
                     default_g = float(round(sgr, 1))
@@ -165,7 +168,7 @@ with st.sidebar:
     c1.button("10", on_click=set_g, args=(10.0,), width="stretch")
     c2.button("20", on_click=set_g, args=(20.0,), width="stretch")
     c3.button("30", on_click=set_g, args=(30.0,), width="stretch")
-    c4.button("40", on_click=set_g, args=(40.0,), width="stretch")
+    c4.button("5", on_click=set_g, args=(5.0,), width="stretch")
     st.button("🔄 SGR 기반 (AI추천)", on_click=set_g, args=(default_g,), width="stretch")
     st.caption(sgr_caption)
 
@@ -211,8 +214,7 @@ if ticker_input:
             debt_to_equity = info.get('debtToEquity', None)
             peg_ratio = info.get('pegRatio', None)
             fcf = info.get('freeCashflow', None)
-            payout_ratio = info.get('payoutRatio', 0)
-            if payout_ratio is None: payout_ratio = 0
+            payout_ratio = info.get('payoutRatio', 0) if info.get('payoutRatio') else 0
             shares = info.get('sharesOutstanding', None)
             sector = info.get('sector', '')
             
@@ -221,7 +223,11 @@ if ticker_input:
             ev_revenue = info.get('enterpriseToRevenue', None)
             forward_pe = info.get('forwardPE', None)
             
-            is_growth = (payout_ratio < 0.15) or ("Technology" in sector) or ("Communication" in sector) or (peg_ratio and peg_ratio > 1.5)
+            # 💡 [핵심 완벽 패치] 메인 화면 적정주가 모델 스위치도 동일하게 적용
+            is_main_value_stock = False
+            value_sectors = ["Consumer Defensive", "Utilities", "Energy", "Real Estate", "Financial Services", "Basic Materials", "Industrials"]
+            if any(v_sec in sector for v_sec in value_sectors) or payout_ratio >= 0.40:
+                is_main_value_stock = True
             
             graham_value = "N/A"
             if eps is not None and eps > 0: graham_value = eps * (8.5 + 2 * g)
@@ -236,7 +242,7 @@ if ticker_input:
                 pv_tv = tv / ((1 + wacc) ** 5)
                 dcf_value = (pv_fcf + pv_tv) / shares
                 
-            if is_growth and dcf_value != "N/A":
+            if not is_main_value_stock and dcf_value != "N/A":
                 final_fair_value = dcf_value
                 model_used = "DCF(현금흐름할인) 모델"
                 badge_html = "<div class='badge badge-growth'>🚀 AI 판독: 테크/성장주 트랙 자동 적용 중</div>"
