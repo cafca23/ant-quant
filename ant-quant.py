@@ -24,8 +24,6 @@ st.markdown("""
     .badge { padding: 5px 10px; border-radius: 5px; font-weight: bold; font-size: 0.9rem; margin-bottom: 10px; display: inline-block; }
     .badge-growth { background-color: rgba(162, 28, 175, 0.2); color: #e879f9; border: 1px solid #c026d3; }
     .badge-value { background-color: rgba(3, 105, 161, 0.2); color: #38bdf8; border: 1px solid #0284c7; }
-    
-    /* Peer Table CSS */
     .peer-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.95rem; }
     .peer-table th { background-color: #161b22; color: #8b949e; padding: 12px 8px; text-align: right; border-bottom: 2px solid #30363d; font-weight: 600; }
     .peer-table th:first-child { text-align: left; }
@@ -45,8 +43,20 @@ def get_macro_data():
     except: tnx = 4.2  
     return float(usdkrw), float(tnx)
 
-# 💡 동종 업계 경쟁사 데이터 수집 엔진
-@st.cache_data(ttl=3600, show_spinner="경쟁사 멀티플 데이터를 수집 중입니다 (최대 10초 소요)...")
+# 💡 [신규] AI 기반 동종 업계 경쟁사 자동 탐색기
+@st.cache_data(ttl=86400, show_spinner="AI가 해당 산업의 최적 경쟁사를 탐색 중입니다... 🕵️‍♂️")
+def get_dynamic_peers(ticker, name, sector):
+    try:
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        model = genai.GenerativeModel('gemini-2.5-flash', generation_config={"temperature": 0.1})
+        prompt = f"Find 3 major US publicly traded competitors for {name} ({ticker}) in the {sector} sector. Return ONLY the 3 ticker symbols separated by commas (e.g., CVX, XOM, COP). No markdown, no explanation."
+        res = model.generate_content(prompt)
+        clean_res = res.text.strip().replace(" ", "").replace("\n", "")
+        if len(clean_res) > 20: return ""
+        return clean_res
+    except: return ""
+
+@st.cache_data(ttl=3600, show_spinner="경쟁사 멀티플 데이터를 수집 중입니다...")
 def get_peers_data(ticker, peer_str):
     peer_list = [p.strip().upper() for p in peer_str.split(",") if p.strip()]
     if ticker not in peer_list:
@@ -79,33 +89,57 @@ def get_stock_market_data(ticker):
 
 ex_rate, risk_free_rate = get_macro_data()
 
-# 경쟁사 자동 맵핑 사전
 PEER_MAP = {
-    "ORCL": "MSFT, CRM, SAP",
-    "AAPL": "MSFT, GOOGL, DELL",
-    "MSFT": "AAPL, GOOGL, ORCL",
-    "TSLA": "TM, F, GM",
-    "NVDA": "AMD, INTC, TSM",
-    "GOOGL": "META, MSFT, AMZN",
-    "AMZN": "WMT, TGT, GOOGL",
-    "META": "GOOGL, SNAP, PINS",
-    "AMD": "NVDA, INTC, QCOM"
+    "ORCL": "MSFT, CRM, SAP", "AAPL": "MSFT, GOOGL, DELL", "MSFT": "AAPL, GOOGL, ORCL",
+    "TSLA": "TM, F, GM", "NVDA": "AMD, INTC, TSM", "GOOGL": "META, MSFT, AMZN",
+    "AMZN": "WMT, TGT, GOOGL", "META": "GOOGL, SNAP, PINS", "AMD": "NVDA, INTC, QCOM"
 }
 
 with st.sidebar:
     st.markdown("### ⚙️ 분석 설정")
-    ticker_input = st.text_input("종목 티커 입력 (예: ORCL, AAPL, NVDA)", value="ORCL")
+    ticker_input = st.text_input("종목 티커 입력 (예: ORCL, OXY, KO)", value="ORCL")
     
     currency_opt = st.radio("💱 표시 통화", ["$ 달러", "₩ 원화"], horizontal=True)
     is_krw = currency_opt == "₩ 원화"
     
     st.divider()
     
-    # 💡 [신규] 경쟁사 입력창
+    # 💡 [핵심] 경쟁사 자동 세팅 로직
     st.markdown("### 🤝 동종 업계 (Peer) 설정")
-    default_peers = PEER_MAP.get(ticker_input.upper(), "MSFT, GOOGL, AAPL") if ticker_input else ""
-    peer_input = st.text_input("경쟁사 티커 (쉼표로 구분)", value=default_peers, help="알파 스프레드식 비교 표를 만들기 위한 경쟁사 목록입니다.")
+    default_peers = "MSFT, GOOGL, AAPL" 
     
+    default_g = 15.0
+    sgr_caption = "💡 AI 추천 성장률: 정보 없음 (기본값 15.0% 적용)"
+    
+    if ticker_input:
+        ticker_for_sidebar = ticker_input.upper()
+        try:
+            info_sb, _, _, _ = get_stock_market_data(ticker_for_sidebar)
+            
+            # --- AI 동종 업계 경쟁사 탐색 ---
+            if ticker_for_sidebar in PEER_MAP:
+                default_peers = PEER_MAP[ticker_for_sidebar]
+            else:
+                company_name = info_sb.get('shortName', ticker_for_sidebar)
+                sector = info_sb.get('sector', '')
+                ai_peers = get_dynamic_peers(ticker_for_sidebar, company_name, sector)
+                if ai_peers: 
+                    default_peers = ai_peers
+            
+            roe_sb = info_sb.get('returnOnEquity', 0)
+            payout_sb = info_sb.get('payoutRatio', 0)
+            if roe_sb is not None and roe_sb > 0:
+                sgr = max(5.0, min(roe_sb * (1 - payout_sb) * 100, 50.0))
+                default_g = float(round(sgr, 1))
+                sgr_caption = f"💡 자동 추천 성장률(SGR 기반): {default_g}%"
+        except: pass
+
+    peer_input = st.text_input("경쟁사 티커 (쉼표로 구분)", value=default_peers, help="AI가 자동으로 찾아낸 경쟁사입니다. 직접 수정하셔도 됩니다.")
+
+    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input:
+        st.session_state.g_slider = default_g
+        st.session_state.last_ticker = ticker_input
+        
     st.divider()
     
     st.markdown("### 🌐 거시경제(매크로) 연동")
@@ -114,30 +148,17 @@ with st.sidebar:
     st.caption(f"💡 AI 자동 세팅 할인율: **{discount_rate}%**")
     
     st.divider()
-    
-    default_g = 15.0
-    if ticker_input:
-        try:
-            info_sb, _, _, _ = get_stock_market_data(ticker_input.upper())
-            roe_sb = info_sb.get('returnOnEquity', 0)
-            payout_sb = info_sb.get('payoutRatio', 0)
-            if roe_sb is not None and roe_sb > 0:
-                sgr = max(5.0, min(roe_sb * (1 - payout_sb) * 100, 50.0))
-                default_g = float(round(sgr, 1))
-        except: pass
-
-    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input:
-        st.session_state.g_slider = default_g
-        st.session_state.last_ticker = ticker_input
         
     def set_g(val): st.session_state.g_slider = val
 
-    g = st.slider("예상 성장률 (g) %", min_value=0.0, max_value=50.0, step=0.5, key="g_slider")
+    g = st.slider("예상 성장률 (g) %", min_value=0.0, max_value=50.0, step=0.5, key="g_slider", help="기업의 향후 5~10년 기대 성장률")
     c1, c2, c3, c4 = st.columns(4)
     c1.button("10", on_click=set_g, args=(10.0,), width="stretch")
     c2.button("20", on_click=set_g, args=(20.0,), width="stretch")
     c3.button("30", on_click=set_g, args=(30.0,), width="stretch")
     c4.button("40", on_click=set_g, args=(40.0,), width="stretch")
+    st.button("🔄 SGR 기반 (AI추천)", on_click=set_g, args=(default_g,), width="stretch")
+    st.caption(sgr_caption)
 
 def fmt_price(val):
     if pd.isna(val) or val == "N/A" or val is None: return "N/A"
@@ -355,7 +376,6 @@ if ticker_input:
                 with pc3: st.metric(label="Payout Ratio (배당 성향)", value=payout_val, delta="건전" if payout_ratio and payout_ratio <= 0.6 else "과부하 우려", delta_color="normal" if payout_ratio and payout_ratio <= 0.6 else "inverse")
                 with pc4: st.metric(label="Inst. Ownership (기관 보유율)", value=inst_val)
                 
-                # 💡 [신규] 알파 스프레드 기반 상대가치(Multiples) 핵심 지표 추가
                 st.markdown("<hr style='margin: 15px 0; border-color: #30363d;'>", unsafe_allow_html=True)
                 st.markdown("<p style='color:#8b949e; font-weight:bold; margin-bottom:10px;'>🔍 알파 스프레드 기반 상대가치 지표 (Relative Valuation Multiples)</p>", unsafe_allow_html=True)
                 
@@ -367,15 +387,11 @@ if ticker_input:
                 
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # ==========================================
-            # 💡 [신규 완벽 구현] 동종 업계 (Peer) 비교 테이블 (알파 스프레드 UI)
-            # ==========================================
             st.markdown("### ⚖️ 동종 업계 멀티플 비교 (Peer Valuation)")
             
             peer_df = get_peers_data(ticker, peer_input)
             
             if not peer_df.empty:
-                # 중앙값(Median) 계산
                 median_pe = peer_df['Fwd P/E'].median()
                 median_ev_ebitda = peer_df['EV/EBITDA'].median()
                 median_ps = peer_df['P/S'].median()
@@ -395,7 +411,6 @@ if ticker_input:
                     table_html += f"<td>{fmt_multi(row['EV/Rev'])}</td>"
                     table_html += "</tr>"
                 
-                # 중앙값 추가
                 table_html += "<tr class='peer-median-row'>"
                 table_html += "<td>산업 중앙값 (Median)</td>"
                 table_html += "<td>-</td>"
@@ -407,23 +422,16 @@ if ticker_input:
                 
                 with st.container(border=True):
                     st.markdown(table_html, unsafe_allow_html=True)
-                    st.caption("※ 사이드바에서 경쟁사 티커를 추가/변경하면 실시간으로 표와 중앙값이 업데이트됩니다.")
             else:
-                st.warning("경쟁사 데이터를 불러올 수 없습니다. 사이드바의 티커를 확인해 주세요.")
+                st.warning("경쟁사 데이터를 불러올 수 없습니다.")
                 
             st.markdown("<br>", unsafe_allow_html=True)
-
-            # ==========================================
-            # 3대 핵심 차트 렌더링 섹션
-            # ==========================================
 
             if not hist_10y.empty and final_fair_value != "N/A":
                 df_10y = hist_10y[['Close']].copy()
                 df_10y.rename(columns={'Close': 'Price'}, inplace=True)
-                
                 latest_date = df_10y.index[-1]
                 years_diff = (latest_date - df_10y.index).days / 365.25
-                
                 df_10y['Value'] = final_fair_value / ((1 + g/100) ** years_diff)
                 df_10y['Over_Top'] = np.maximum(df_10y['Price'], df_10y['Value'])
                 df_10y['Under_Bottom'] = np.minimum(df_10y['Price'], df_10y['Value'])
@@ -450,9 +458,7 @@ if ticker_input:
                     yaxis=dict(showgrid=True, gridcolor='#30363d', zerolinecolor='#30363d', side='right', tickprefix="₩" if is_krw else "$"),
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                 )
-                
-                with st.container(border=True):
-                    st.plotly_chart(fig_val, use_container_width=True)
+                with st.container(border=True): st.plotly_chart(fig_val, use_container_width=True)
 
             plot_hist_1y = hist_1y.copy()
             if is_krw:
@@ -479,7 +485,6 @@ if ticker_input:
                     for col in ['Open', 'High', 'Low', 'Close', 'MA10', 'MA20', 'MA60', 'MA120', 'ATR_Stop']: plot_df_wk[col] *= ex_rate
 
                 st.markdown("<br><br>### 🔭 트레이딩뷰 주봉 차트", unsafe_allow_html=True)
-                
                 fig_wk = go.Figure()
                 fig_wk.add_trace(go.Candlestick(x=plot_df_wk.index, open=plot_df_wk['Open'], high=plot_df_wk['High'], low=plot_df_wk['Low'], close=plot_df_wk['Close'], increasing_line_color='#ef5350', decreasing_line_color='#42a5f5', name=f"{ticker} 주봉"))
                 fig_wk.add_trace(go.Scatter(x=plot_df_wk.index, y=plot_df_wk['MA10'], mode='lines', line=dict(color='#ab47bc', width=1.5), name='10주선'))
@@ -505,7 +510,6 @@ if ticker_input:
                 )
                 with st.container(border=True): st.plotly_chart(fig_wk, use_container_width=True)
 
-            # --- AI 수석 비서 브리핑 ---
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("### 🤖 수석 비서의 AI 종합 브리핑 (Tier 1)")
             if st.button("✨ 퀀트 데이터 기반 AI 분석 보고서 작성", type="primary", width="stretch"):
@@ -513,7 +517,6 @@ if ticker_input:
                     try:
                         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
                         model = genai.GenerativeModel('gemini-2.5-flash', generation_config={"temperature": 0.7, "max_output_tokens": 8000})
-                        
                         ai_median_pe = f"{median_pe:.2f}배" if not peer_df.empty else "데이터 없음"
                         
                         prompt = f"""
