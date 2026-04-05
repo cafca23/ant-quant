@@ -8,7 +8,7 @@ from datetime import datetime
 import google.generativeai as genai
 import re
 
-st.set_page_config(page_title="미장 All 퀀트 스캐너", layout="wide", page_icon="📈", initial_sidebar_state="expanded")
+st.set_page_config(page_title="1. 미장 All 퀀트 스캐너", layout="wide", page_icon="📈", initial_sidebar_state="expanded")
 
 # --- Custom Premium CSS ---
 st.markdown("""
@@ -197,7 +197,7 @@ def fmt_pct(val):
 # --- 메인 로직 ---
 col_header1, col_header2 = st.columns([3, 1])
 with col_header1:
-    st.markdown("<h1 style='margin-bottom: 0; font-size: 2.0rem;'>📈 미장 All 퀀트 스캐너</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='margin-bottom: 0; font-size: 2.0rem;'>1. 미장 All 퀀트 스캐너</h1>", unsafe_allow_html=True)
     st.markdown("<p style='color: #8b949e; font-size: 1.05rem; margin-top: 5px;'>월스트리트 DCF + 상대가치 + 스마트머니 하이브리드 엔진</p>", unsafe_allow_html=True)
 
 if ticker_input:
@@ -375,7 +375,7 @@ if ticker_input:
             
             st.markdown(badge_html, unsafe_allow_html=True)
             
-            st.markdown("### 📊 주요 기술지표")
+            st.markdown("### 2. 주요 기술지표")
             with st.container(border=True):
                 c1, c2, c3, c4 = st.columns(4)
                 with c1: st.metric(label="현재 주가", value=fmt_price(current_price), delta=f"{drawdown:.2f}% (최고가대비)")
@@ -395,7 +395,7 @@ if ticker_input:
                 with c7: st.metric(label="52주 최고가", value=fmt_price(high_1y))
                 with c8: st.metric(label="52주 최저가", value=fmt_price(low_1y))
             
-            fund_status = "📊 주요 기술지표 브리핑"
+            fund_status = "2. 주요 기술지표 브리핑"
             fund_color = "#29b6f6" 
             fund_bg = "41, 182, 246"
             
@@ -430,7 +430,7 @@ if ticker_input:
             peer_df = get_peers_data(ticker, peer_input)
             median_pe_val = peer_df['Fwd P/E'].median() if not peer_df.empty else None
 
-            st.markdown("### 👔 전문가 핵심 지표")
+            st.markdown("### 3. 전문가 핵심 지표")
             with st.container(border=True):
                 pc1, pc2, pc3, pc4 = st.columns(4)
                 
@@ -489,7 +489,7 @@ if ticker_input:
                 with sc4: st.metric(label="OBV Trend (매집/분산 수급)", value="하단 차트 확인 📉", help="아래 일봉 차트 밑의 OBV 보조 차트를 통해 세력이 매집 중인지, 물량을 떠넘기고 있는지 시각적으로 확인하십시오.")
 
             smart_color = "#29b6f6" 
-            smart_status = "📊 전문가 핵심 지표 브리핑"
+            smart_status = "3. 전문가 핵심 지표 브리핑"
             smart_desc = ""
             
             if forward_pe and median_pe_val is not None and not np.isnan(median_pe_val):
@@ -548,7 +548,7 @@ if ticker_input:
                 
             st.markdown("<br>", unsafe_allow_html=True)
             
-            st.markdown("### ⚖️ 동종 업계 멀티플 비교 (Peer Valuation)")
+            st.markdown("### 4. 동종 업계 비교 (Peer Valuation)")
             
             if not peer_df.empty:
                 table_html = "<table class='peer-table'><tr><th>Ticker</th><th>Price (현재 주가)</th><th>Forward P/E (선행 PER)</th><th>EV/EBITDA (현금창출비율)</th><th>P/S Ratio (주가/매출액)</th><th>EV/Revenue (기업가치/매출)</th></tr>"
@@ -607,7 +607,7 @@ if ticker_input:
             if is_krw:
                 for col in ['Open', 'High', 'Low', 'Close', 'SMA50', 'SMA200']: plot_hist_1y[col] *= ex_rate
 
-            st.markdown("<br>### 📉 최근 1년 주가 일봉 차트 & 세력 매집(OBV) 지표", unsafe_allow_html=True)
+            st.markdown("<br>5. 최근 1년 주가 일봉 차트 & 세력 매집(OBV) 지표", unsafe_allow_html=True)
             
             fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25])
             fig.add_trace(go.Candlestick(x=plot_hist_1y.index, open=plot_hist_1y['Open'], high=plot_hist_1y['High'], low=plot_hist_1y['Low'], close=plot_hist_1y['Close'], increasing_line_color='#ef5350', decreasing_line_color='#42a5f5', name=f"{ticker} 캔들"), row=1, col=1)
@@ -669,7 +669,7 @@ if ticker_input:
                 if is_krw:
                     for col in ['Open', 'High', 'Low', 'Close', 'MA10', 'MA20', 'MA60', 'MA120', 'ATR_Stop']: plot_df_wk[col] *= ex_rate
 
-                st.markdown("<br><br>### 🔭 트레이딩뷰 주봉 차트", unsafe_allow_html=True)
+                st.markdown("<br><br>6. 주봉차트 타점 발생기", unsafe_allow_html=True)
                 fig_wk = go.Figure()
                 fig_wk.add_trace(go.Candlestick(x=plot_df_wk.index, open=plot_df_wk['Open'], high=plot_df_wk['High'], low=plot_df_wk['Low'], close=plot_df_wk['Close'], increasing_line_color='#ef5350', decreasing_line_color='#42a5f5', name=f"{ticker} 주봉"))
                 fig_wk.add_trace(go.Scatter(x=plot_df_wk.index, y=plot_df_wk['MA10'], mode='lines', line=dict(color='#ab47bc', width=1.5), name='10주선'))
