@@ -57,7 +57,7 @@ def get_dynamic_peers(ticker, name, sector):
         return clean_res
     except: return ""
 
-@st.cache_data(ttl=3600, show_spinner="경쟁사 멀티플 데이터를 수집 중입니다...")
+@st.cache_data(ttl=300, show_spinner="경쟁사 멀티플 데이터를 수집 중입니다...") # 💡 실전 매매를 위해 5분 캐시로 단축
 def get_peers_data(ticker, peer_str):
     peer_list = [p.strip().upper() for p in peer_str.split(",") if p.strip()]
     if ticker not in peer_list:
@@ -77,7 +77,7 @@ def get_peers_data(ticker, peer_str):
         except: pass
     return pd.DataFrame(data)
 
-@st.cache_data(ttl=3600, show_spinner="티커 재무 데이터를 분석하고 있습니다...")
+@st.cache_data(ttl=300, show_spinner="티커 재무 데이터를 분석하고 있습니다...") # 💡 실전 매매를 위해 5분 캐시로 단축
 def get_stock_market_data(ticker):
     stock = yf.Ticker(ticker)
     info = stock.info
@@ -152,10 +152,10 @@ with st.sidebar:
 
     peer_input = st.text_input("경쟁사 티커 (쉼표로 구분)", value=default_peers, help="AI가 자동으로 찾아낸 경쟁사입니다. 직접 수정하셔도 됩니다.")
 
-    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_matrix_added':
+    if 'last_ticker' not in st.session_state or st.session_state.last_ticker != ticker_input or st.session_state.get('app_version') != 'v_final_us_trade':
         st.session_state.g_slider = default_g
         st.session_state.last_ticker = ticker_input
-        st.session_state.app_version = 'v_final_matrix_added'
+        st.session_state.app_version = 'v_final_us_trade'
         
     st.divider()
     
@@ -640,7 +640,7 @@ if ticker_input:
                     box_style = "border-left: 4px solid #f85149; background-color: rgba(248, 81, 73, 0.1);"
                 elif recent_price_trend < -2.0 and obv_trend > 0:
                     obv_color = "#3fb950" 
-                    obv_status = "🌟 [기회] 스마트머니 은밀한 매집 (다이버전스)"
+                    obv_status = "🌟 [기회] 스마트머니 은밀 매집 (다이버전스)"
                     obv_desc = "최근 3개월(60일)간 주가는 하락세인데, 매집량(OBV)은 빳빳하게 우상향하고 있습니다. 개미들이 공포에 던지는 물량을 큰손(세력)들이 바닥에서 조용히 쓸어 담고 있는 강력한 매수 대기 시그널입니다."
                     box_style = "border-left: 4px solid #3fb950; background-color: rgba(63, 185, 80, 0.1);"
                 elif recent_price_trend >= -2.0 and obv_trend >= 0:
@@ -650,7 +650,7 @@ if ticker_input:
                     box_style = "border-left: 4px solid #29b6f6; background-color: rgba(41, 182, 246, 0.1);"
                 else:
                     obv_color = "#8b949e" 
-                    obv_status = "📉 [위험] 강력한 하락세 및 세력 이탈 (투매)"
+                    obv_status = "📉 [위험] 강력 하락세 및 세력 이탈 (투매)"
                     obv_desc = "주가와 매집량(OBV)이 모두 밑으로 곤두박질치고 있습니다. 세력과 기관들이 앞다투어 물량을 던지고 3개월째 탈출하는 중이므로, 떨어지는 칼날을 맨손으로 잡으면 절대 안 되는 차트입니다."
                     box_style = "border-left: 4px solid #8b949e; background-color: rgba(139, 148, 158, 0.1);"
                     
@@ -695,7 +695,6 @@ if ticker_input:
                 )
                 with st.container(border=True): st.plotly_chart(fig_wk, use_container_width=True)
 
-                # 💡 [신규] 실전 매매 매트릭스 고정! (다른 코드는 일절 건드리지 않았습니다)
                 st.markdown("""
                 <div style="background-color: #161b22; padding: 20px; border-radius: 8px; border: 1px solid #30363d; margin-top: 20px;">
                     <h3 style="margin-top: 0; color: #e6edf3;">💡 수석 비서가 추천하는 실전 매매 매트릭스</h3>
@@ -729,12 +728,13 @@ if ticker_input:
                         - ROE: {roe*100:.1f}% / 현재 미국 국채 금리: {risk_free_rate:.2f}%
                         
                         [작성 규칙]
-                        1. 시작: "대표님, [{ticker}] 스마트머니 및 퀀트 종합 분석 보고드립니다."
-                        2. 공매도 수급 평가: 이 기업이 {model_used}로 평가되는 기업(가치주인지 성장주인지)이라는 점을 감안하여, 공매도 비율({short_text})이 위험한 수준인지 브리핑하세요. (가치주는 3%, 테크주는 10% 기준)
-                        3. 핵심 분석: 해당 기업의 P/E가 동종업계 중앙값보다 싼지 비싼지(상대가치)를 비교하여 매력도를 개조식(~함, ~됨)으로 분석하세요.
-                        4. 별표(*)와 이모지 사용 금지. 대괄호([ ]) 사용.
-                        5. 마침표(.) 뒤에는 무조건 줄바꿈(엔터).
-                        6. 마지막 줄: "💡 수석 비서의 최종 투자의견:" 이라는 항목 달고 1줄 요약 결론.
+                        1. 시작: "대표님, [{ticker}] 스마트머니 및 퀀트 종합 분석 보고드립니다." (이 문장만 예외로 '니다' 사용)
+                        2. 어투: 문장 끝에 "~습니다", "~입니다" 등 경어체 절대 금지. 반드시 "~함", "~됨", "~임", "~음"으로 끝나는 간결한 개조식/보고서체로 작성할 것.
+                        3. 공매도 수급 평가: 이 기업이 {model_used}로 평가되는 기업(가치주/성장주)이라는 점을 감안하여, 공매도 비율({short_text})이 위험한 수준인지 브리핑할 것. (가치주는 3%, 테크주는 10% 기준)
+                        4. 핵심 분석: 해당 기업의 P/E가 동종업계 중앙값보다 싼지 비싼지(상대가치)를 비교하여 매력도를 분석할 것.
+                        5. 별표(*)와 이모지 사용 금지 (마지막 줄 전구 제외). 대괄호([ ]) 사용.
+                        6. 가독성(매우 중요): 마침표(.)를 찍은 후에는 무조건 줄바꿈(엔터)을 넣어서 문장이 한 칸 아래로 내려가게 할 것. (문단이 아닌 문장 단위로 줄바꿈)
+                        7. 마지막 줄: "💡 수석 비서의 최종 투자의견:" 이라는 항목 달고 1줄 요약 결론.
                         """
                         response = model.generate_content(prompt)
                         st.success("✅ 종합 브리핑 완료!")
