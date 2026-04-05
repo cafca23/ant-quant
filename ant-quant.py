@@ -8,7 +8,7 @@ from datetime import datetime
 import google.generativeai as genai
 import re
 
-st.set_page_config(page_title="앤트리치 퀀트 터미널", layout="wide", page_icon="📈", initial_sidebar_state="expanded")
+st.set_page_config(page_title="미장 All 퀀트 스캐너", layout="wide", page_icon="📈", initial_sidebar_state="expanded")
 
 # --- Custom Premium CSS ---
 st.markdown("""
@@ -197,7 +197,7 @@ def fmt_pct(val):
 # --- 메인 로직 ---
 col_header1, col_header2 = st.columns([3, 1])
 with col_header1:
-    st.markdown("<h1 style='margin-bottom: 0; font-size: 2.0rem;'>📈 앤트리치 퀀트 터미널</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='margin-bottom: 0; font-size: 2.0rem;'>📈 미장 All 퀀트 스캐너</h1>", unsafe_allow_html=True)
     st.markdown("<p style='color: #8b949e; font-size: 1.05rem; margin-top: 5px;'>월스트리트 DCF + 상대가치 + 스마트머니 하이브리드 엔진</p>", unsafe_allow_html=True)
 
 if ticker_input:
