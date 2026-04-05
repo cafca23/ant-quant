@@ -375,7 +375,7 @@ if ticker_input:
             
             st.markdown(badge_html, unsafe_allow_html=True)
             
-            st.markdown("### 📊 주요 기술지표")
+            st.markdown("1. 주요 기술지표")
             with st.container(border=True):
                 c1, c2, c3, c4 = st.columns(4)
                 with c1: st.metric(label="현재 주가", value=fmt_price(current_price), delta=f"{drawdown:.2f}% (최고가대비)")
@@ -395,7 +395,7 @@ if ticker_input:
                 with c7: st.metric(label="52주 최고가", value=fmt_price(high_1y))
                 with c8: st.metric(label="52주 최저가", value=fmt_price(low_1y))
             
-            fund_status = "📊 주요 기술지표 브리핑"
+            fund_status = "1. 주요 기술지표 브리핑"
             fund_color = "#29b6f6" 
             fund_bg = "41, 182, 246"
             
