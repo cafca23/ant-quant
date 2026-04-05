@@ -197,7 +197,7 @@ def fmt_pct(val):
 # --- 메인 로직 ---
 col_header1, col_header2 = st.columns([3, 1])
 with col_header1:
-    st.markdown("<h1 style='margin-bottom: 0; font-size: 2.0rem;'>📈 미장 All 퀀트 스캐너</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='margin-bottom: 0; font-size: 2.0rem;'>1. 미장 All 퀀트 스캐너</h1>", unsafe_allow_html=True)
     st.markdown("<p style='color: #8b949e; font-size: 1.05rem; margin-top: 5px;'>월스트리트 DCF + 상대가치 + 스마트머니 하이브리드 엔진</p>", unsafe_allow_html=True)
 
 if ticker_input:
@@ -375,7 +375,7 @@ if ticker_input:
             
             st.markdown(badge_html, unsafe_allow_html=True)
             
-            st.markdown("1. 주요 기술지표")
+            st.markdown("<h1 style='margin-bottom: 0; font-size: 2.0rem;'>2. 주요 기술지표</h1>", unsafe_allow_html=True)
             with st.container(border=True):
                 c1, c2, c3, c4 = st.columns(4)
                 with c1: st.metric(label="현재 주가", value=fmt_price(current_price), delta=f"{drawdown:.2f}% (최고가대비)")
