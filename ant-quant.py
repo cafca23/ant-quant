@@ -375,9 +375,9 @@ if ticker_input:
             
             st.markdown(badge_html, unsafe_allow_html=True)
             
-            st.markdown("<h1 style='margin-bottom: 0; font-size: 2.0rem;'>2. 주요 기술지표</h1>", unsafe_allow_html=True)
+            st.markdown("### 2. 주요 기술지표")
             with st.container(border=True):
-                c1, c2, c3, c4 = st.columns(4)
+                pc1, pc2, pc3, pc4 = st.columns(4)
                 with c1: st.metric(label="현재 주가", value=fmt_price(current_price), delta=f"{drawdown:.2f}% (최고가대비)")
                 with c2: st.metric(label=f"적정 주가 ({model_used})", value=fmt_price(final_fair_value) if final_fair_value != "N/A" else "N/A", 
                                    delta=f"{margin_of_safety:.2f}% (안전마진)" if margin_of_safety != "N/A" else None,
@@ -395,7 +395,7 @@ if ticker_input:
                 with c7: st.metric(label="52주 최고가", value=fmt_price(high_1y))
                 with c8: st.metric(label="52주 최저가", value=fmt_price(low_1y))
             
-            fund_status = "1. 주요 기술지표 브리핑"
+            fund_status = "2. 주요 기술지표 브리핑"
             fund_color = "#29b6f6" 
             fund_bg = "41, 182, 246"
             
@@ -430,7 +430,7 @@ if ticker_input:
             peer_df = get_peers_data(ticker, peer_input)
             median_pe_val = peer_df['Fwd P/E'].median() if not peer_df.empty else None
 
-            st.markdown("### 👔 전문가 핵심 지표")
+            st.markdown("### 3. 전문가 핵심 지표")
             with st.container(border=True):
                 pc1, pc2, pc3, pc4 = st.columns(4)
                 
@@ -489,7 +489,7 @@ if ticker_input:
                 with sc4: st.metric(label="OBV Trend (매집/분산 수급)", value="하단 차트 확인 📉", help="아래 일봉 차트 밑의 OBV 보조 차트를 통해 세력이 매집 중인지, 물량을 떠넘기고 있는지 시각적으로 확인하십시오.")
 
             smart_color = "#29b6f6" 
-            smart_status = "📊 전문가 핵심 지표 브리핑"
+            smart_status = "3. 전문가 핵심 지표 브리핑"
             smart_desc = ""
             
             if forward_pe and median_pe_val is not None and not np.isnan(median_pe_val):
